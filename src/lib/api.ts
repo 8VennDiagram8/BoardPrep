@@ -6,10 +6,74 @@ import type {
   Catalog,
   Flashcard,
   Program,
+  ProgramId,
   Question,
   Subject,
   Topic,
 } from './types'
+
+type DbRow = Record<string, any>
+
+/** Supabase columns are snake_case; the app models are camelCase. */
+function mapProgram(row: DbRow): Program {
+  return {
+    id: row.id as ProgramId,
+    code: row.code ?? '',
+    name: row.name ?? '',
+    shortName: row.short_name ?? '',
+    description: row.description ?? '',
+    accent: row.accent === 'cyan' ? 'cyan' : 'indigo',
+    glyph: row.glyph ?? '📘',
+  }
+}
+
+function mapSubject(row: DbRow): Subject {
+  return {
+    id: row.id,
+    programId: row.program_id as ProgramId,
+    name: row.name ?? '',
+    code: row.code ?? '',
+    description: row.description ?? '',
+    glyph: row.glyph ?? '📗',
+  }
+}
+
+function mapTopic(row: DbRow): Topic {
+  return {
+    id: row.id,
+    subjectId: row.subject_id ?? '',
+    programId: row.program_id as ProgramId,
+    name: row.name ?? '',
+    description: row.description ?? '',
+  }
+}
+
+function mapQuestion(row: DbRow): Question {
+  return {
+    id: row.id,
+    programId: row.program_id as ProgramId,
+    subjectId: row.subject_id ?? '',
+    topicId: row.topic_id ?? '',
+    prompt: row.prompt ?? '',
+    options: Array.isArray(row.options) ? row.options : [],
+    answerIndex: Number(row.answer_index ?? 0),
+    explanation: row.explanation ?? '',
+    difficulty: row.difficulty === 'easy' || row.difficulty === 'hard' ? row.difficulty : 'medium',
+    source: row.source === 'generated' || row.source === 'manual' ? row.source : 'seed',
+    generatedAt: row.generated_at ?? undefined,
+  }
+}
+
+function mapFlashcard(row: DbRow): Flashcard {
+  return {
+    id: row.id,
+    programId: row.program_id as ProgramId,
+    subjectId: row.subject_id ?? '',
+    topicId: row.topic_id ?? '',
+    front: row.front ?? '',
+    back: row.back ?? '',
+  }
+}
 
 const CUSTOM_QUESTIONS_KEY = 'custom-questions'
 
@@ -55,11 +119,11 @@ export async function getCatalog(): Promise<Catalog> {
     }
 
     return withLocalQuestions({
-      programs: (programs.data ?? []) as Program[],
-      subjects: (subjects.data ?? []) as Subject[],
-      topics: (topics.data ?? []) as Topic[],
-      questions: (questions.data ?? []) as Question[],
-      flashcards: (flashcards.data ?? []) as Flashcard[],
+      programs: (programs.data ?? []).map(mapProgram),
+      subjects: (subjects.data ?? []).map(mapSubject),
+      topics: (topics.data ?? []).map(mapTopic),
+      questions: (questions.data ?? []).map(mapQuestion),
+      flashcards: (flashcards.data ?? []).map(mapFlashcard),
     })
   } catch {
     return withLocalQuestions(seedCatalog)
