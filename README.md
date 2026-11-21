@@ -64,6 +64,8 @@ The browser calls BoardPrep's own `/api/generate-questions` and `/api/import-pdf
 GEMINI_API_KEY=your-gemini-api-key
 ```
 
+PDF extraction saves each finished batch to the question bank immediately, so you can **Cancel** at any time and keep everything extracted so far. Progress shows the current page range and the running saved count.
+
 Questions are stored in `localStorage` in demo mode, or in the Supabase `questions` table when connected (run migrations `002` and `003`).
 
 ## Scripts

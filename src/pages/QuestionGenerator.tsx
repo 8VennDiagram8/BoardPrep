@@ -10,8 +10,9 @@ import {
   Sparkles,
   Trash2,
   WandSparkles,
+  X,
 } from 'lucide-react'
-import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge, EmptyState, PageHeader } from '../components/ui'
 import { useApp } from '../context/AppContext'
@@ -394,15 +395,21 @@ function normalisePrompt(value: string): string {
   return value.toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
-async function retryOnDemand<T>(run: () => Promise<T>, attempt = 0): Promise<T> {
+async function retryOnDemand<T>(
+  run: () => Promise<T>,
+  signal?: AbortSignal,
+  attempt = 0,
+): Promise<T> {
+  if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError')
   try {
     return await run()
   } catch (cause) {
+    if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError')
     const message = cause instanceof Error ? cause.message : ''
     const transient = /high demand|overloaded|resource exhausted|rate limit|too many requests|429|503|try again later/i.test(message)
     if (attempt >= 2 || !transient) throw cause
     await new Promise((resolve) => setTimeout(resolve, 2000 * (attempt + 1)))
-    return retryOnDemand(run, attempt + 1)
+    return retryOnDemand(run, signal, attempt + 1)
   }
 }
 
@@ -418,7 +425,10 @@ function PdfImportPanel() {
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
+  const [savedCount, setSavedCount] = useState(0)
+  const [finished, setFinished] = useState(false)
+  const [cancelled, setCancelled] = useState(false)
+  const abortRef = useRef<AbortController | null>(null)
 
   const candidates: TopicCandidate[] = (
     subjectId
@@ -460,6 +470,12 @@ function PdfImportPanel() {
     setQuestions([])
   }
 
+  function cancel() {
+    abortRef.current?.abort()
+    setCancelled(true)
+    setProgress('Cancelling after the current batch…')
+  }
+
   async function extract() {
     if (!file) {
       setError('Choose a PDF file first.')
@@ -473,9 +489,14 @@ function PdfImportPanel() {
       setError('No topics are available to classify the questions into.')
       return
     }
+
+    const controller = new AbortController()
+    abortRef.current = controller
     setBusy(true)
     setError(null)
-    setSaved(false)
+    setSavedCount(0)
+    setFinished(false)
+    setCancelled(false)
     setQuestions([])
     setProgress('Reading PDF…')
 
@@ -489,62 +510,73 @@ function PdfImportPanel() {
       const { chunks, pageCount } = await splitPdf(bytes, pagesPerBatch)
 
       for (let index = 0; index < chunks.length; index += 1) {
+        if (controller.signal.aborted) break
         const start = index * pagesPerBatch + 1
         const end = Math.min(start + pagesPerBatch - 1, pageCount)
-        setProgress(`Extracting pages ${start}–${end} of ${pageCount} · ${collected.length} questions so far`)
+        setProgress(`Pages ${start}–${end} of ${pageCount} · ${collected.length} saved so far`)
 
         try {
-          const found = await retryOnDemand(() => importQuestionsFromPdf({
-            programId,
-            subjectId,
-            topicId: autoDetect ? (candidates[0]?.id ?? topicId) : topicId,
-            programName: catalog.programs.find((item) => item.id === programId)?.name ?? programId,
-            subjectName: subjectId
-              ? catalog.subjects.find((item) => item.id === subjectId)?.name ?? subjectId
-              : 'Mixed subjects',
-            topicName: autoDetect
-              ? 'Detect per question'
-              : catalog.topics.find((item) => item.id === topicId)?.name ?? 'Topic',
-            count: 0,
-            difficulty: 'mixed',
-            fileName: `${file.name} (pages ${start}-${end})`,
-            fileData: toBase64(chunks[index]),
-            autoDetectTopic: autoDetect,
-            topics: candidates,
-          }))
+          const found = await retryOnDemand(
+            () => importQuestionsFromPdf({
+              programId,
+              subjectId,
+              topicId: autoDetect ? (candidates[0]?.id ?? topicId) : topicId,
+              programName: catalog.programs.find((item) => item.id === programId)?.name ?? programId,
+              subjectName: subjectId
+                ? catalog.subjects.find((item) => item.id === subjectId)?.name ?? subjectId
+                : 'Mixed subjects',
+              topicName: autoDetect
+                ? 'Detect per question'
+                : catalog.topics.find((item) => item.id === topicId)?.name ?? 'Topic',
+              count: 0,
+              difficulty: 'mixed',
+              fileName: `${file.name} (pages ${start}-${end})`,
+              fileData: toBase64(chunks[index]),
+              autoDetectTopic: autoDetect,
+              topics: candidates,
+            }, controller.signal),
+            controller.signal,
+          )
+          if (controller.signal.aborted) break
+
+          const fresh: Question[] = []
           for (const question of found) {
             const key = normalisePrompt(question.prompt)
             if (!key || seen.has(key)) continue
             seen.add(key)
+            fresh.push(question)
             collected.push(question)
+          }
+          // Save as we go so a large import is never lost, even if cancelled later.
+          if (fresh.length > 0) {
+            await addQuestions(fresh)
+            setSavedCount((value) => value + fresh.length)
           }
           setQuestions([...collected])
         } catch (cause) {
+          if (controller.signal.aborted) break
           failures.push(`pages ${start}–${end}: ${cause instanceof Error ? cause.message : 'failed'}`)
         }
       }
 
       setQuestions(collected)
-      if (collected.length === 0) {
-        setError('No questions were found in this PDF. Try a smaller pages-per-batch value.')
-      } else if (failures.length > 0) {
-        setError(`${failures.length} batch(es) failed. ${failures[0]}`)
+      if (!controller.signal.aborted) {
+        setFinished(true)
+        if (collected.length === 0) {
+          setError('No questions were found in this PDF. Try a smaller pages-per-batch value.')
+        } else if (failures.length > 0) {
+          setError(`${failures.length} batch(es) failed. ${failures[0]}`)
+        }
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not read the PDF.')
+      if (!controller.signal.aborted) {
+        setError(cause instanceof Error ? cause.message : 'Could not read the PDF.')
+      }
     } finally {
       setBusy(false)
       setProgress('')
+      abortRef.current = null
     }
-  }
-
-  async function saveAll() {
-    setBusy(true)
-    await addQuestions(questions)
-    setBusy(false)
-    setSaved(true)
-    setQuestions([])
-    setFile(null)
   }
 
   const groups = new Map<string, Question[]>()
@@ -649,23 +681,52 @@ function PdfImportPanel() {
             <span className="text-muted">{(file.size / 1024 / 1024).toFixed(1)} MB</span>
           </div>
         )}
-        <button type="button" className="btn btn-primary w-full" onClick={() => void extract()} disabled={busy || !file}>
-          {busy ? <LoaderCircle size={17} className="animate-spin" /> : <FileUp size={17} />}
-          {busy ? 'Extracting…' : 'Extract questions'}
-        </button>
+        <div className="flex gap-2">
+          <button type="button" className="btn btn-primary flex-1" onClick={() => void extract()} disabled={busy || !file}>
+            {busy ? <LoaderCircle size={17} className="animate-spin" /> : <FileUp size={17} />}
+            {busy ? 'Extracting…' : 'Extract questions'}
+          </button>
+          {busy && (
+            <button type="button" className="btn btn-secondary !px-3" onClick={cancel}>
+              <X size={16} /> Cancel
+            </button>
+          )}
+        </div>
+        <p className="mt-2 text-center text-[0.7rem] text-muted">
+          Questions are saved to your bank automatically as each batch finishes.
+        </p>
       </aside>
 
       <div>
         {error && <ErrorNote message={error} />}
-        {busy && progress && questions.length > 0 && (
-          <div className="mb-4 flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 p-3 text-xs font-semibold text-brand-700 dark:border-brand-800 dark:bg-brand-500/10 dark:text-brand-300">
-            <LoaderCircle size={14} className="animate-spin" /> {progress}
+        {busy && progress && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 p-3 text-xs font-semibold text-brand-700 dark:border-brand-800 dark:bg-brand-500/10 dark:text-brand-300">
+            <LoaderCircle size={14} className="animate-spin" />
+            <span className="flex-1">{progress}</span>
+            <span className="rounded-full bg-brand-600 px-2 py-0.5 text-[0.65rem] text-white">
+              {savedCount} saved
+            </span>
           </div>
         )}
-        <SaveBar count={questions.length} busy={busy} saved={saved} onSave={() => void saveAll()} onDiscard={() => { setQuestions([]); setSaved(false) }} />
+        {!busy && cancelled && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+            <AlertCircle size={14} /> Cancelled — {savedCount} question{savedCount === 1 ? '' : 's'} saved to your bank.
+            <Link to="/practice" className="ml-auto inline-flex items-center gap-1 underline">
+              Practice <ArrowRight size={13} />
+            </Link>
+          </div>
+        )}
+        {!busy && finished && savedCount > 0 && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
+            <Check size={14} /> Extraction complete — {savedCount} question{savedCount === 1 ? '' : 's'} saved to your bank.
+            <Link to="/practice" className="ml-auto inline-flex items-center gap-1 underline">
+              Practice <ArrowRight size={13} />
+            </Link>
+          </div>
+        )}
         {busy && questions.length === 0 ? (
           <LoadingCard message={progress || 'Reading your PDF and classifying each question…'} />
-        ) : questions.length === 0 && !saved ? (
+        ) : questions.length === 0 && !cancelled && !finished ? (
           <EmptyState icon="📄" title="No questions extracted yet" description="Choose a PDF, then extract. Questions are grouped by the topic Gemini detects for each one." />
         ) : (
           <div className="space-y-5">

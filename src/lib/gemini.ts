@@ -47,11 +47,15 @@ export interface PdfImportRequest extends GenerateRequest {
   topics?: TopicCandidate[]
 }
 
-export async function importQuestionsFromPdf(request: PdfImportRequest): Promise<Question[]> {
+export async function importQuestionsFromPdf(
+  request: PdfImportRequest,
+  signal?: AbortSignal,
+): Promise<Question[]> {
   const response = await fetch('/api/import-pdf', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
+    signal,
   })
 
   const data = (await response.json().catch(() => ({}))) as {
