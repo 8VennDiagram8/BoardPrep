@@ -16,7 +16,7 @@ The catalog is data-driven, so more programs, subjects and topics can be added l
 - Timed mixed-subject mock exams with a countdown and locked answers
 - Results page with score, subject breakdown and full answer review
 - Flashcards with flip, shuffle, and known/review-again tracking
-- **Question bank tools** — generate questions with `gemini-3.8-flash`, extract them from uploaded PDFs, or type them manually — all with answers and solutions
+- **Question bank tools** — generate questions with `gemini-3.6-flash`, extract them from uploaded PDFs, or type them manually — all with answers and solutions
 - Progress analytics: accuracy trend, mastery table, streak and session history
 - Guest (demo) mode plus Supabase email/password authentication
 - Light/dark themes, responsive layout, JSON progress export
@@ -58,7 +58,7 @@ Open **Question Bank** in the sidebar. It has three tabs:
 
 Saved questions immediately appear in practice, mock exams, analytics and flashcard topics.
 
-The browser calls BoardPrep's own `/api/generate-questions` and `/api/import-pdf` routes. The key is **server-side only** — set `GEMINI_API_KEY` in `.env.local` for development or in Vercel for production; there is no key field in the UI and the key is never sent to the browser. The model used is `gemini-3.8-flash` with structured JSON output and low thinking for faster generation.
+The browser calls BoardPrep's own `/api/generate-questions` and `/api/import-pdf` routes. The key is **server-side only** — set `GEMINI_API_KEY` in `.env.local` for development or in Vercel for production; there is no key field in the UI and the key is never sent to the browser. The model used is `gemini-3.6-flash` with structured JSON output and low thinking for faster generation.
 
 ```env
 GEMINI_API_KEY=your-gemini-api-key

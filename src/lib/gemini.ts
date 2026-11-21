@@ -11,7 +11,7 @@ export interface GenerateRequest {
   difficulty: 'mixed' | Difficulty
 }
 
-export const GEMINI_MODEL = 'gemini-3.8-flash'
+export const GEMINI_MODEL = 'gemini-3.6-flash'
 
 /** Calls BoardPrep's own API route; the Gemini key stays on the server. */
 export async function requestGeneratedQuestions(request: GenerateRequest): Promise<Question[]> {

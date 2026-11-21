@@ -351,7 +351,7 @@ function GeneratePanel() {
         {error && <ErrorNote message={error} />}
         <SaveBar count={total} busy={busy} saved={saved} onSave={() => void saveAll()} onDiscard={() => { setBatches([]); setSaved(false) }} />
         {busy && batches.length === 0 ? (
-          <LoadingCard message={progress || 'Contacting Gemini 3.8 Flash'} />
+          <LoadingCard message={progress || 'Contacting Gemini 3.6 Flash'} />
         ) : batches.length === 0 && !saved ? (
           <EmptyState icon="✨" title="No questions generated yet" description="Choose a scope on the left and generate. Review the preview, then save the questions you want." />
         ) : (
@@ -492,7 +492,7 @@ function PdfImportPanel() {
             className="input !py-2 !text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
           />
           <span className="mt-1.5 block text-[0.7rem] leading-relaxed text-muted">
-            Maximum 3 MB. Questions and answers are extracted with Gemini 3.8 Flash.
+            Maximum 3 MB. Questions and answers are extracted with Gemini 3.6 Flash.
           </span>
         </label>
         {file && (
@@ -726,7 +726,7 @@ export function QuestionGenerator() {
         eyebrow="Question bank"
         title="Add board exam questions"
         description={`Generate with ${GEMINI_MODEL}, extract from a PDF, or type them yourself — every question is saved with its answer and solution.`}
-        actions={<Badge tone="brand"><Sparkles size={12} /> Gemini 3.8 Flash</Badge>}
+        actions={<Badge tone="brand"><Sparkles size={12} /> Gemini 3.6 Flash</Badge>}
       />
       <div className="mb-6 flex flex-wrap gap-2">
         {tabs.map(({ id, label, icon: Icon }) => (
