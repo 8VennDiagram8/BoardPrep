@@ -51,6 +51,7 @@ export default function App() {
               <Route path="/practice" element={<Practice />} />
               <Route path="/flashcards" element={<Flashcards />} />
               <Route path="/generate" element={<QuestionGenerator />} />
+              <Route path="/questions" element={<QuestionGenerator />} />
               <Route path="/progress" element={<Progress />} />
               <Route path="/results/:attemptId" element={<Results />} />
               <Route path="/settings" element={<Settings />} />

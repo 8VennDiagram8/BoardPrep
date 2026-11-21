@@ -1,30 +1,46 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv } from 'vite'
-import { generateQuestions, type GenerateQuestionsInput } from './server/gemini.ts'
+import {
+  extractQuestionsFromPdf,
+  generateQuestions,
+  type GenerateQuestionsInput,
+} from './server/gemini.ts'
 
-/** Serves the same generation endpoint locally so `npm run dev` works without Vercel. */
+interface ImportBody extends Partial<GenerateQuestionsInput> {
+  fileName?: string
+  fileData?: string
+}
+
+async function readJson(req: any): Promise<Record<string, any>> {
+  let raw = ''
+  for await (const chunk of req) raw += chunk.toString()
+  return raw ? JSON.parse(raw) : {}
+}
+
+function send(res: any, status: number, payload: unknown) {
+  res.statusCode = status
+  res.setHeader('Content-Type', 'application/json')
+  res.end(JSON.stringify(payload))
+}
+
+function getApiKey(): string {
+  const key = process.env.GEMINI_API_KEY
+  if (!key) {
+    throw new Error('GEMINI_API_KEY is not configured. Add it to .env.local and restart the dev server.')
+  }
+  return key
+}
+
+/** Serves the same endpoints locally so `npm run dev` works without Vercel. */
 function geminiApiPlugin() {
   return {
     name: 'boardprep-gemini-api',
     configureServer(server: any) {
       server.middlewares.use('/api/generate-questions', async (req: any, res: any) => {
-        if (req.method !== 'POST') {
-          res.statusCode = 405
-          res.end(JSON.stringify({ error: 'Method not allowed' }))
-          return
-        }
-
+        if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' })
         try {
-          let raw = ''
-          for await (const chunk of req) raw += chunk.toString()
-          const body = (raw ? JSON.parse(raw) : {}) as Partial<GenerateQuestionsInput>
-
-          const apiKey = process.env.GEMINI_API_KEY
-          if (!apiKey) {
-            throw new Error('GEMINI_API_KEY is not configured on the server. Add it to .env.local and restart the dev server.')
-          }
-
+          const body = await readJson(req) as Partial<GenerateQuestionsInput>
           const questions = await generateQuestions(
             {
               programId: body.programId!,
@@ -36,15 +52,40 @@ function geminiApiPlugin() {
               count: body.count ?? 5,
               difficulty: body.difficulty ?? 'mixed',
             },
-            apiKey,
+            getApiKey(),
           )
-
-          res.setHeader('Content-Type', 'application/json')
-          res.end(JSON.stringify({ questions }))
+          send(res, 200, { questions })
         } catch (error) {
-          res.statusCode = 400
-          res.setHeader('Content-Type', 'application/json')
-          res.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Generation failed' }))
+          send(res, 400, { error: error instanceof Error ? error.message : 'Generation failed' })
+        }
+      })
+
+      server.middlewares.use('/api/import-pdf', async (req: any, res: any) => {
+        if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' })
+        try {
+          const body = await readJson(req) as ImportBody
+          if (!body.fileData) return send(res, 400, { error: 'A PDF file is required.' })
+          if (body.fileData.length > 4_000_000) {
+            return send(res, 413, { error: 'PDF is too large. Please use a file under 3 MB.' })
+          }
+          const questions = await extractQuestionsFromPdf(
+            {
+              programId: body.programId!,
+              subjectId: body.subjectId!,
+              topicId: body.topicId!,
+              programName: body.programName ?? body.programId?.toUpperCase() ?? 'Board exam',
+              subjectName: body.subjectName ?? body.subjectId ?? 'Subject',
+              topicName: body.topicName ?? 'Topic',
+              count: 0,
+              difficulty: 'mixed',
+            },
+            getApiKey(),
+            body.fileData,
+            body.fileName ?? 'document.pdf',
+          )
+          send(res, 200, { questions })
+        } catch (error) {
+          send(res, 400, { error: error instanceof Error ? error.message : 'PDF import failed' })
         }
       })
     },

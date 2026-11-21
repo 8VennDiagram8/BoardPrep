@@ -1,5 +1,5 @@
 /**
- * Shared question-generation logic used by both the Vercel serverless function
+ * Shared question-generation logic used by both the Vercel serverless functions
  * and the Vite dev middleware. Kept free of framework types so it runs in both.
  *
  * Model: gemini-3.8-flash (Google AI Studio / Gemini API)
@@ -26,6 +26,10 @@ interface GeminiQuestion {
   explanation?: unknown
   difficulty?: unknown
 }
+
+type GeminiPart =
+  | { text: string }
+  | { inline_data: { mime_type: string; data: string } }
 
 const responseSchema = {
   type: 'OBJECT',
@@ -81,6 +85,28 @@ function buildPrompt(input: GenerateQuestionsInput): string {
   ].join('\n')
 }
 
+function buildExtractPrompt(input: GenerateQuestionsInput, fileName: string): string {
+  return [
+    'You extract multiple-choice board exam questions from a PDF document.',
+    '',
+    `Source file: ${fileName}`,
+    `Tag every extracted question with this board / program: ${input.programName} (${input.programId.toUpperCase()})`,
+    `Subject: ${input.subjectName}`,
+    `Topic: ${input.topicName}`,
+    '',
+    'Requirements:',
+    '- Extract EVERY distinct multiple-choice question present in the PDF, including any that appear in a separate answer-key section.',
+    '- Each question must have exactly four options and exactly one correct answer.',
+    '- Determine the correct answer from the PDF answer key when one is provided; otherwise work the problem out yourself.',
+    '- If the PDF includes a rationale or solution, include it. Otherwise write a concise solution showing the key reasoning or formula.',
+    '- Ignore headers, page numbers, instructions, tables of contents and answer-key lines that are not actual questions.',
+    '- Keep the original wording as closely as possible; do not invent questions that are not in the document.',
+    '- Set difficulty to easy, medium or hard based on the question.',
+    '',
+    'Return ONLY a JSON object matching the provided response schema.',
+  ].join('\n')
+}
+
 function stripCodeFence(text: string): string {
   const trimmed = text.trim()
   const match = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
@@ -117,13 +143,12 @@ function toQuestion(item: GeminiQuestion, input: GenerateQuestionsInput): Questi
   }
 }
 
-/** Calls Gemini 3.8 Flash and returns validated, storage-ready questions. */
-export async function generateQuestions(
-  input: GenerateQuestionsInput,
+async function callGemini(
+  parts: GeminiPart[],
   apiKey: string,
+  input: GenerateQuestionsInput,
+  maxCount?: number,
 ): Promise<Question[]> {
-  const count = Math.min(20, Math.max(1, Math.floor(Number(input.count) || 5)))
-
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
     {
@@ -133,15 +158,15 @@ export async function generateQuestions(
         'x-goog-api-key': apiKey,
       },
       body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: buildPrompt({ ...input, count }) }] }],
+        contents: [{ role: 'user', parts }],
         generationConfig: {
           responseMimeType: 'application/json',
           responseSchema,
           thinkingConfig: { thinkingLevel: 'LOW' },
-          maxOutputTokens: 16384,
+          maxOutputTokens: 32768,
         },
       }),
-      signal: AbortSignal.timeout(90_000),
+      signal: AbortSignal.timeout(120_000),
     },
   )
 
@@ -168,10 +193,36 @@ export async function generateQuestions(
   const questions = items
     .map((item) => toQuestion(item, input))
     .filter((item): item is Question => item !== null)
-    .slice(0, count)
 
-  if (questions.length === 0) {
-    throw new Error('No valid questions were generated. Please try again.')
+  const limited = maxCount === undefined ? questions : questions.slice(0, maxCount)
+  if (limited.length === 0) {
+    throw new Error('No valid questions were found. Please try again.')
   }
-  return questions
+  return limited
+}
+
+/** Generates fresh questions from a topic description. */
+export async function generateQuestions(
+  input: GenerateQuestionsInput,
+  apiKey: string,
+): Promise<Question[]> {
+  const count = Math.min(20, Math.max(1, Math.floor(Number(input.count) || 5)))
+  return callGemini([{ text: buildPrompt({ ...input, count }) }], apiKey, input, count)
+}
+
+/** Extracts questions and answers from a base64-encoded PDF. */
+export async function extractQuestionsFromPdf(
+  input: GenerateQuestionsInput,
+  apiKey: string,
+  pdfBase64: string,
+  fileName: string,
+): Promise<Question[]> {
+  return callGemini(
+    [
+      { text: buildExtractPrompt(input, fileName) },
+      { inline_data: { mime_type: 'application/pdf', data: pdfBase64 } },
+    ],
+    apiKey,
+    input,
+  )
 }

@@ -31,3 +31,27 @@ export async function requestGeneratedQuestions(request: GenerateRequest): Promi
   }
   return data.questions ?? []
 }
+
+export interface PdfImportRequest extends GenerateRequest {
+  fileName: string
+  /** Base64-encoded PDF bytes, without the data-URL prefix. */
+  fileData: string
+}
+
+export async function importQuestionsFromPdf(request: PdfImportRequest): Promise<Question[]> {
+  const response = await fetch('/api/import-pdf', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+
+  const data = (await response.json().catch(() => ({}))) as {
+    questions?: Question[]
+    error?: string
+  }
+
+  if (!response.ok) {
+    throw new Error(data.error ?? `Request failed with status ${response.status}.`)
+  }
+  return data.questions ?? []
+}

@@ -23,7 +23,7 @@ const mainNav = [
   { to: '/programs', label: 'Programs', icon: BookOpen, end: false },
   { to: '/practice', label: 'Practice', icon: Target, end: false },
   { to: '/flashcards', label: 'Flashcards', icon: Layers3, end: false },
-  { to: '/generate', label: 'Generator', icon: WandSparkles, end: false },
+  { to: '/questions', label: 'Question Bank', icon: WandSparkles, end: false },
   { to: '/progress', label: 'Progress', icon: GraduationCap, end: false },
 ]
 

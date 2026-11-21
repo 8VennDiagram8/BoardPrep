@@ -16,7 +16,7 @@ The catalog is data-driven, so more programs, subjects and topics can be added l
 - Timed mixed-subject mock exams with a countdown and locked answers
 - Results page with score, subject breakdown and full answer review
 - Flashcards with flip, shuffle, and known/review-again tracking
-- **AI question generator** — create topic/subject/program-wide mock questions with `gemini-3.8-flash`, preview them with solutions, and save them into the question bank
+- **Question bank tools** — generate questions with `gemini-3.8-flash`, extract them from uploaded PDFs, or type them manually — all with answers and solutions
 - Progress analytics: accuracy trend, mastery table, streak and session history
 - Guest (demo) mode plus Supabase email/password authentication
 - Light/dark themes, responsive layout, JSON progress export
@@ -48,17 +48,23 @@ The app falls back to the bundled catalog if Supabase is unreachable, so it stil
 
 > Change the content in `src/data/seed.ts`, then run `npm run seed:generate` to regenerate `supabase/seed.sql`.
 
-## Generate questions with Gemini
+## Question bank tools
 
-Open **Generator** in the sidebar. Pick a board, subject and scope (single topic, all topics in a subject, or all topics in the program), choose how many questions per topic, then generate. Each item includes four options, a marked correct answer and a written solution. Review the preview, discard weak items, and save the rest to the bank — they immediately become available in practice, mock exams and analytics.
+Open **Question Bank** in the sidebar. It has three tabs:
 
-The browser calls BoardPrep's own `/api/generate-questions` route. The key is **server-side only** — set `GEMINI_API_KEY` in `.env.local` for development or in Vercel for production; there is no key field in the UI and the key is never sent to the browser. The model used is `gemini-3.8-flash` with structured JSON output and low thinking for faster generation. If the variable is missing, the generator shows a configuration error instead of generating.
+- **Generate with AI** — pick a board, subject and scope (single topic, all topics in a subject, or all topics in the program), choose questions per topic, then generate. Every item has four options, one correct answer and a written solution.
+- **Import PDF** — upload a PDF (up to 3 MB) for a chosen topic. Gemini reads the document, extracts its questions and answer key, and returns structured items with solutions. Review before saving.
+- **Type manually** — enter a question, four options, mark the correct one, and write the solution. Build a draft and save it when done; you can edit draft items before saving.
+
+Saved questions immediately appear in practice, mock exams, analytics and flashcard topics.
+
+The browser calls BoardPrep's own `/api/generate-questions` and `/api/import-pdf` routes. The key is **server-side only** — set `GEMINI_API_KEY` in `.env.local` for development or in Vercel for production; there is no key field in the UI and the key is never sent to the browser. The model used is `gemini-3.8-flash` with structured JSON output and low thinking for faster generation.
 
 ```env
 GEMINI_API_KEY=your-gemini-api-key
 ```
 
-Generated questions are stored in `localStorage` in demo mode, or in the Supabase `questions` table when connected.
+Questions are stored in `localStorage` in demo mode, or in the Supabase `questions` table when connected (run migrations `002` and `003`).
 
 ## Scripts
 

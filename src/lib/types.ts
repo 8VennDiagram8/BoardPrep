@@ -43,8 +43,8 @@ export interface Question {
   answerIndex: number
   explanation: string
   difficulty: Difficulty
-  /** Bundled questions use "seed"; AI-generated questions use "generated". */
-  source?: 'seed' | 'generated'
+  /** Bundled, AI-generated or manually typed question. */
+  source?: 'seed' | 'generated' | 'manual'
   generatedAt?: string
 }
 
