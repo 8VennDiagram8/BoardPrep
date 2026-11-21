@@ -66,6 +66,8 @@ GEMINI_API_KEY=your-gemini-api-key
 
 PDF extraction saves each finished batch to the question bank immediately, so you can **Cancel** at any time and keep everything extracted so far. Progress shows the current page range and the running saved count.
 
+Generation and PDF extraction run in a module-level job store (`src/lib/jobs.ts`), so they continue in the background when you switch Question Bank tabs or navigate to another page. Return to the tab any time to see live progress, preview results, or cancel.
+
 Questions are stored in `localStorage` in demo mode, or in the Supabase `questions` table when connected (run migrations `002` and `003`).
 
 ## Scripts

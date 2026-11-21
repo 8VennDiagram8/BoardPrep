@@ -12,16 +12,23 @@ import {
   WandSparkles,
   X,
 } from 'lucide-react'
-import { useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge, EmptyState, PageHeader } from '../components/ui'
 import { useApp } from '../context/AppContext'
+import { GEMINI_MODEL, type TopicCandidate } from '../lib/gemini'
 import {
-  GEMINI_MODEL,
-  importQuestionsFromPdf,
-  requestGeneratedQuestions,
-  type TopicCandidate,
-} from '../lib/gemini'
+  cancelGenerateJob,
+  cancelPdfJob,
+  removeGenerateQuestion,
+  removePdfQuestion,
+  resetGenerateJob,
+  saveGenerateJob,
+  startGenerateJob,
+  startPdfJob,
+  useJobs,
+  type GenerateTarget,
+} from '../lib/jobs'
 import { createId } from '../lib/local'
 import type { Difficulty, ProgramId, Question } from '../lib/types'
 import { cn } from '../lib/utils'
@@ -102,14 +109,10 @@ function QuestionPreview({
   questions,
   onRemove,
   onEdit,
-  title,
-  countLabel,
 }: {
   questions: Question[]
   onRemove: (id: string) => void
   onEdit?: (question: Question) => void
-  title?: string
-  countLabel?: string
 }) {
   const { topic } = useApp()
   return (
@@ -147,12 +150,11 @@ function QuestionPreview({
             ))}
           </div>
           <div className="ml-11 mt-2 flex items-start gap-2 rounded-lg bg-surface-2 p-2.5 text-xs leading-relaxed text-muted">
-            <Badge tone="neutral" className="shrink-0">{countLabel ?? 'Solution'}</Badge>
+            <Badge tone="neutral" className="shrink-0">Solution</Badge>
             <span>{question.explanation}</span>
           </div>
         </div>
       ))}
-      {title && <p className="sr-only">{title}</p>}
     </div>
   )
 }
@@ -163,14 +165,12 @@ function SaveBar({
   saved,
   onSave,
   onDiscard,
-  saveLabel = 'Save to question bank',
 }: {
   count: number
   busy: boolean
   saved: boolean
   onSave: () => void
   onDiscard: () => void
-  saveLabel?: string
 }) {
   if (count === 0 && !saved) return null
   return (
@@ -179,7 +179,7 @@ function SaveBar({
         <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
           <Check size={16} /> Questions saved to your bank.
           <Link to="/practice" className="ml-auto inline-flex items-center gap-1 underline">
-            Practice them <ArrowRight size={13} />
+            Practice <ArrowRight size={13} />
           </Link>
         </div>
       )}
@@ -197,11 +197,30 @@ function SaveBar({
           </button>
           <button type="button" className="btn btn-primary" onClick={onSave} disabled={busy}>
             {busy ? <LoaderCircle size={16} className="animate-spin" /> : <Save size={16} />}
-            {saveLabel}
+            Save to question bank
           </button>
         </div>
       )}
     </>
+  )
+}
+
+function ErrorNote({ message }: { message: string }) {
+  return (
+    <div className="mb-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-800 dark:bg-rose-500/10 dark:text-rose-300">
+      <AlertCircle size={16} className="mt-0.5 shrink-0" />
+      <span>{message}</span>
+    </div>
+  )
+}
+
+function LoadingCard({ message }: { message: string }) {
+  return (
+    <div className="card flex min-h-72 flex-col items-center justify-center gap-3 text-center">
+      <span className="size-9 animate-spin rounded-full border-2 border-line border-t-brand-500" />
+      <p className="text-sm font-semibold">Working…</p>
+      <p className="text-xs text-muted">{message}</p>
+    </div>
   )
 }
 
@@ -210,25 +229,32 @@ function SaveBar({
 /* -------------------------------------------------------------------------- */
 
 function GeneratePanel() {
-  const { catalog, subjectsForProgram, topicsForSubject, addQuestions } = useApp()
+  const { catalog, subjectsForProgram, topicsForSubject } = useApp()
+  const { generate } = useJobs()
   const [programId, setProgramId] = useState<ProgramId>('ecele')
   const [subjectId, setSubjectId] = useState(() => subjectsForProgram('ecele')[0]?.id ?? '')
   const [topicId, setTopicId] = useState('')
   const [scope, setScope] = useState<Scope>('topic')
   const [difficulty, setDifficulty] = useState<'mixed' | Difficulty>('mixed')
   const [perTopic, setPerTopic] = useState(3)
+  const [localError, setLocalError] = useState<string | null>(null)
 
-  const [batches, setBatches] = useState<Array<{ topicId: string; questions: Question[] }>>([])
-  const [busy, setBusy] = useState(false)
-  const [progress, setProgress] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
-
-  const targets = useMemo(() => {
-    if (scope === 'topic') return topicId ? catalog.topics.filter((item) => item.id === topicId) : []
-    if (scope === 'subject') return catalog.topics.filter((item) => item.subjectId === subjectId)
-    return catalog.topics.filter((item) => item.programId === programId)
-  }, [scope, topicId, subjectId, programId, catalog.topics])
+  const targets = useMemo<GenerateTarget[]>(() => {
+    const topics =
+      scope === 'topic'
+        ? topicId ? catalog.topics.filter((item) => item.id === topicId) : []
+        : scope === 'subject'
+          ? catalog.topics.filter((item) => item.subjectId === subjectId)
+          : catalog.topics.filter((item) => item.programId === programId)
+    return topics.map((item) => ({
+      id: item.id,
+      programId: item.programId,
+      subjectId: item.subjectId,
+      name: item.name,
+      programName: catalog.programs.find((program) => program.id === item.programId)?.name ?? item.programId,
+      subjectName: catalog.subjects.find((subject) => subject.id === item.subjectId)?.name ?? item.subjectId,
+    }))
+  }, [scope, topicId, subjectId, programId, catalog])
 
   const countSaved = (id: string) =>
     catalog.questions.filter((item) => item.topicId === id && item.source === 'generated').length
@@ -238,60 +264,13 @@ function GeneratePanel() {
     const first = subjectsForProgram(next)[0]?.id ?? ''
     setSubjectId(first)
     setTopicId(topicsForSubject(first)[0]?.id ?? '')
-    setBatches([])
   }
   function handleSubject(next: string) {
     setSubjectId(next)
     setTopicId(topicsForSubject(next)[0]?.id ?? '')
-    setBatches([])
   }
 
-  async function generate() {
-    if (targets.length === 0) {
-      setError('Choose at least one topic to generate questions for.')
-      return
-    }
-    setBusy(true)
-    setError(null)
-    setSaved(false)
-    setBatches([])
-    const results: Array<{ topicId: string; questions: Question[] }> = []
-    const failures: string[] = []
-
-    for (let index = 0; index < targets.length; index += 1) {
-      const target = targets[index]
-      setProgress(`Generating ${target.name} — ${index + 1} of ${targets.length}`)
-      try {
-        const questions = await requestGeneratedQuestions({
-          programId: target.programId,
-          subjectId: target.subjectId,
-          topicId: target.id,
-          programName: catalog.programs.find((item) => item.id === target.programId)?.name ?? target.programId,
-          subjectName: catalog.subjects.find((item) => item.id === target.subjectId)?.name ?? target.subjectId,
-          topicName: target.name,
-          count: perTopic,
-          difficulty,
-        })
-        if (questions.length > 0) results.push({ topicId: target.id, questions })
-      } catch (cause) {
-        failures.push(`${target.name}: ${cause instanceof Error ? cause.message : 'failed'}`)
-      }
-    }
-    setBatches(results)
-    setProgress('')
-    setBusy(false)
-    if (failures.length > 0) setError(`${failures.length} topic(s) failed. ${failures[0]}`)
-  }
-
-  async function saveAll() {
-    setBusy(true)
-    await addQuestions(batches.flatMap((batch) => batch.questions))
-    setBusy(false)
-    setSaved(true)
-    setBatches([])
-  }
-
-  const total = batches.reduce((sum, batch) => sum + batch.questions.length, 0)
+  const total = generate.batches.reduce((sum, batch) => sum + batch.questions.length, 0)
 
   return (
     <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
@@ -303,7 +282,7 @@ function GeneratePanel() {
           topicId={topicId}
           onProgram={handleProgram}
           onSubject={handleSubject}
-          onTopic={(value) => { setTopicId(value); setBatches([]) }}
+          onTopic={setTopicId}
           showTopic={scope === 'topic'}
           topicCounts={countSaved}
         />
@@ -314,7 +293,7 @@ function GeneratePanel() {
               <button
                 key={value}
                 type="button"
-                onClick={() => { setScope(value); setBatches([]) }}
+                onClick={() => setScope(value)}
                 className={cn(
                   'rounded-lg border py-2 text-xs font-semibold transition',
                   scope === value
@@ -326,41 +305,64 @@ function GeneratePanel() {
               </button>
             ))}
           </div>
-          <p className="mt-1.5 text-[0.7rem] leading-relaxed text-muted">
-            {scope === 'topic'
-              ? 'Generate questions for one selected topic.'
-              : scope === 'subject'
-                ? `All ${catalog.topics.filter((item) => item.subjectId === subjectId).length} topics in this subject.`
-                : `All ${catalog.topics.filter((item) => item.programId === programId).length} topics in this program.`}
-          </p>
         </div>
-        <DifficultySelect value={difficulty} onChange={(value) => setDifficulty(value)} />
+        <DifficultySelect value={difficulty} onChange={setDifficulty} />
         <label className="mb-5 block">
           <span className="mb-1.5 flex items-center justify-between text-xs font-semibold text-muted">
             <span>Questions per topic</span><span className="text-ink">{perTopic}</span>
           </span>
           <input type="range" min={1} max={10} value={perTopic} onChange={(event) => setPerTopic(Number(event.target.value))} className="w-full accent-brand-600" />
         </label>
-        <button type="button" className="btn btn-primary w-full" onClick={() => void generate()} disabled={busy || targets.length === 0}>
-          {busy ? <LoaderCircle size={17} className="animate-spin" /> : <WandSparkles size={17} />}
-          {busy ? 'Generating…' : 'Generate questions'}
+        <button
+          type="button"
+          className="btn btn-primary w-full"
+          disabled={generate.running || targets.length === 0}
+          onClick={() => {
+            if (targets.length === 0) {
+              setLocalError('Choose at least one topic to generate questions for.')
+              return
+            }
+            setLocalError(null)
+            startGenerateJob({ targets, perTopic, difficulty })
+          }}
+        >
+          {generate.running ? <LoaderCircle size={17} className="animate-spin" /> : <WandSparkles size={17} />}
+          {generate.running ? 'Generating…' : 'Generate questions'}
         </button>
-        {progress && <p className="mt-3 text-center text-xs text-brand-600 dark:text-brand-400">{progress}</p>}
+        {generate.running && (
+          <button type="button" className="btn btn-secondary mt-2 w-full !text-xs" onClick={cancelGenerateJob}>
+            <X size={14} /> Cancel generation
+          </button>
+        )}
+        {generate.progress && <p className="mt-3 text-center text-xs text-brand-600 dark:text-brand-400">{generate.progress}</p>}
         <p className="mt-3 text-center text-[0.7rem] text-muted">
           {targets.length} topic{targets.length === 1 ? '' : 's'} × {perTopic} ≈ {targets.length * perTopic} items
         </p>
       </aside>
 
       <div>
-        {error && <ErrorNote message={error} />}
-        <SaveBar count={total} busy={busy} saved={saved} onSave={() => void saveAll()} onDiscard={() => { setBatches([]); setSaved(false) }} />
-        {busy && batches.length === 0 ? (
-          <LoadingCard message={progress || 'Contacting Gemini 3.6 Flash'} />
-        ) : batches.length === 0 && !saved ? (
-          <EmptyState icon="✨" title="No questions generated yet" description="Choose a scope on the left and generate. Review the preview, then save the questions you want." />
+        {localError && <ErrorNote message={localError} />}
+        {generate.error && <ErrorNote message={generate.error} />}
+        {generate.running && generate.progress && (
+          <div className="mb-4 flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 p-3 text-xs font-semibold text-brand-700 dark:border-brand-800 dark:bg-brand-500/10 dark:text-brand-300">
+            <LoaderCircle size={14} className="animate-spin" /> {generate.progress}
+            <span className="ml-auto">You can switch tabs or pages — generation continues.</span>
+          </div>
+        )}
+        <SaveBar
+          count={total}
+          busy={generate.saving}
+          saved={generate.saved}
+          onSave={() => void saveGenerateJob()}
+          onDiscard={resetGenerateJob}
+        />
+        {generate.running && generate.batches.length === 0 ? (
+          <LoadingCard message={generate.progress || 'Contacting Gemini 3.6 Flash'} />
+        ) : generate.batches.length === 0 && !generate.saved ? (
+          <EmptyState icon="✨" title="No questions generated yet" description="Choose a scope and generate. Work continues even if you leave this tab." />
         ) : (
           <div className="space-y-5">
-            {batches.map((batch) => (
+            {generate.batches.map((batch) => (
               <section key={batch.topicId}>
                 <div className="mb-2 flex items-center gap-2">
                   <h2 className="heading text-sm">{catalog.topics.find((item) => item.id === batch.topicId)?.name}</h2>
@@ -374,7 +376,7 @@ function GeneratePanel() {
                 </div>
                 <QuestionPreview
                   questions={batch.questions}
-                  onRemove={(id) => setBatches((current) => current.map((b) => ({ ...b, questions: b.questions.filter((q) => q.id !== id) })).filter((b) => b.questions.length > 0))}
+                  onRemove={(id) => removeGenerateQuestion(batch.topicId, id)}
                 />
               </section>
             ))}
@@ -391,44 +393,16 @@ function GeneratePanel() {
 
 const MAX_PDF_BYTES = 20 * 1024 * 1024
 
-function normalisePrompt(value: string): string {
-  return value.toLowerCase().replace(/\s+/g, ' ').trim()
-}
-
-async function retryOnDemand<T>(
-  run: () => Promise<T>,
-  signal?: AbortSignal,
-  attempt = 0,
-): Promise<T> {
-  if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError')
-  try {
-    return await run()
-  } catch (cause) {
-    if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError')
-    const message = cause instanceof Error ? cause.message : ''
-    const transient = /high demand|overloaded|resource exhausted|rate limit|too many requests|429|503|try again later/i.test(message)
-    if (attempt >= 2 || !transient) throw cause
-    await new Promise((resolve) => setTimeout(resolve, 2000 * (attempt + 1)))
-    return retryOnDemand(run, signal, attempt + 1)
-  }
-}
-
 function PdfImportPanel() {
-  const { catalog, subjectsForProgram, topicsForSubject, addQuestions } = useApp()
+  const { catalog, subjectsForProgram, topicsForSubject } = useApp()
+  const { pdf } = useJobs()
   const [programId, setProgramId] = useState<ProgramId>('ecele')
   const [subjectId, setSubjectId] = useState(() => subjectsForProgram('ecele')[0]?.id ?? '')
   const [topicId, setTopicId] = useState('')
   const [autoDetect, setAutoDetect] = useState(true)
   const [pagesPerBatch, setPagesPerBatch] = useState(5)
   const [file, setFile] = useState<File | null>(null)
-  const [questions, setQuestions] = useState<Question[]>([])
-  const [busy, setBusy] = useState(false)
-  const [progress, setProgress] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [savedCount, setSavedCount] = useState(0)
-  const [finished, setFinished] = useState(false)
-  const [cancelled, setCancelled] = useState(false)
-  const abortRef = useRef<AbortController | null>(null)
+  const [localError, setLocalError] = useState<string | null>(null)
 
   const candidates: TopicCandidate[] = (
     subjectId
@@ -446,141 +420,68 @@ function PdfImportPanel() {
     const first = subjectsForProgram(next)[0]?.id ?? ''
     setSubjectId(first)
     setTopicId(topicsForSubject(first)[0]?.id ?? '')
-    setQuestions([])
   }
   function handleSubject(next: string) {
     setSubjectId(next)
     setTopicId(topicsForSubject(next)[0]?.id ?? '')
-    setQuestions([])
   }
 
   function chooseFile(event: ChangeEvent<HTMLInputElement>) {
     const selected = event.target.files?.[0] ?? null
-    setError(null)
+    setLocalError(null)
     if (!selected) return
     if (selected.type !== 'application/pdf' && !selected.name.toLowerCase().endsWith('.pdf')) {
-      setError('Please choose a PDF file.')
+      setLocalError('Please choose a PDF file.')
       return
     }
     if (selected.size > MAX_PDF_BYTES) {
-      setError('PDF is too large. Please use a file under 20 MB.')
+      setLocalError('PDF is too large. Please use a file under 20 MB.')
       return
     }
     setFile(selected)
-    setQuestions([])
-  }
-
-  function cancel() {
-    abortRef.current?.abort()
-    setCancelled(true)
-    setProgress('Cancelling after the current batch…')
   }
 
   async function extract() {
     if (!file) {
-      setError('Choose a PDF file first.')
+      setLocalError('Choose a PDF file first.')
       return
     }
     if (!autoDetect && !topicId) {
-      setError('Choose a topic, or turn on auto-detect.')
+      setLocalError('Choose a topic, or turn on auto-detect.')
       return
     }
     if (autoDetect && candidates.length === 0) {
-      setError('No topics are available to classify the questions into.')
+      setLocalError('No topics are available to classify the questions into.')
       return
     }
-
-    const controller = new AbortController()
-    abortRef.current = controller
-    setBusy(true)
-    setError(null)
-    setSavedCount(0)
-    setFinished(false)
-    setCancelled(false)
-    setQuestions([])
-    setProgress('Reading PDF…')
-
-    const collected: Question[] = []
-    const seen = new Set(catalog.questions.map((item) => normalisePrompt(item.prompt)))
-    const failures: string[] = []
-
-    try {
-      const bytes = new Uint8Array(await file.arrayBuffer())
-      const { splitPdf, toBase64 } = await import('../lib/pdf')
-      const { chunks, pageCount } = await splitPdf(bytes, pagesPerBatch)
-
-      for (let index = 0; index < chunks.length; index += 1) {
-        if (controller.signal.aborted) break
-        const start = index * pagesPerBatch + 1
-        const end = Math.min(start + pagesPerBatch - 1, pageCount)
-        setProgress(`Pages ${start}–${end} of ${pageCount} · ${collected.length} saved so far`)
-
-        try {
-          const found = await retryOnDemand(
-            () => importQuestionsFromPdf({
-              programId,
-              subjectId,
-              topicId: autoDetect ? (candidates[0]?.id ?? topicId) : topicId,
-              programName: catalog.programs.find((item) => item.id === programId)?.name ?? programId,
-              subjectName: subjectId
-                ? catalog.subjects.find((item) => item.id === subjectId)?.name ?? subjectId
-                : 'Mixed subjects',
-              topicName: autoDetect
-                ? 'Detect per question'
-                : catalog.topics.find((item) => item.id === topicId)?.name ?? 'Topic',
-              count: 0,
-              difficulty: 'mixed',
-              fileName: `${file.name} (pages ${start}-${end})`,
-              fileData: toBase64(chunks[index]),
-              autoDetectTopic: autoDetect,
-              topics: candidates,
-            }, controller.signal),
-            controller.signal,
-          )
-          if (controller.signal.aborted) break
-
-          const fresh: Question[] = []
-          for (const question of found) {
-            const key = normalisePrompt(question.prompt)
-            if (!key || seen.has(key)) continue
-            seen.add(key)
-            fresh.push(question)
-            collected.push(question)
-          }
-          // Save as we go so a large import is never lost, even if cancelled later.
-          if (fresh.length > 0) {
-            await addQuestions(fresh)
-            setSavedCount((value) => value + fresh.length)
-          }
-          setQuestions([...collected])
-        } catch (cause) {
-          if (controller.signal.aborted) break
-          failures.push(`pages ${start}–${end}: ${cause instanceof Error ? cause.message : 'failed'}`)
-        }
-      }
-
-      setQuestions(collected)
-      if (!controller.signal.aborted) {
-        setFinished(true)
-        if (collected.length === 0) {
-          setError('No questions were found in this PDF. Try a smaller pages-per-batch value.')
-        } else if (failures.length > 0) {
-          setError(`${failures.length} batch(es) failed. ${failures[0]}`)
-        }
-      }
-    } catch (cause) {
-      if (!controller.signal.aborted) {
-        setError(cause instanceof Error ? cause.message : 'Could not read the PDF.')
-      }
-    } finally {
-      setBusy(false)
-      setProgress('')
-      abortRef.current = null
-    }
+    setLocalError(null)
+    startPdfJob({
+      bytes: new Uint8Array(await file.arrayBuffer()),
+      fileName: file.name,
+      pagesPerBatch,
+      baseRequest: {
+        programId,
+        subjectId,
+        topicId: autoDetect ? (candidates[0]?.id ?? topicId) : topicId,
+        programName: catalog.programs.find((item) => item.id === programId)?.name ?? programId,
+        subjectName: subjectId
+          ? catalog.subjects.find((item) => item.id === subjectId)?.name ?? subjectId
+          : 'Mixed subjects',
+        count: 0,
+        difficulty: 'mixed',
+        autoDetectTopic: autoDetect,
+        topics: candidates,
+      },
+      topicName: autoDetect
+        ? 'Detect per question'
+        : catalog.topics.find((item) => item.id === topicId)?.name ?? 'Topic',
+      candidates,
+      existingPrompts: catalog.questions.map((item) => item.prompt),
+    })
   }
 
   const groups = new Map<string, Question[]>()
-  for (const question of questions) {
+  for (const question of pdf.questions) {
     const group = groups.get(question.topicId) ?? []
     group.push(question)
     groups.set(question.topicId, group)
@@ -594,7 +495,7 @@ function PdfImportPanel() {
           type="button"
           role="switch"
           aria-checked={autoDetect}
-          onClick={() => { setAutoDetect((value) => !value); setQuestions([]) }}
+          onClick={() => setAutoDetect((value) => !value)}
           className={cn(
             'mb-2 flex w-full items-center gap-3 rounded-xl border p-3.5 text-left transition',
             autoDetect
@@ -643,7 +544,7 @@ function PdfImportPanel() {
           topicId={topicId}
           onProgram={handleProgram}
           onSubject={handleSubject}
-          onTopic={(value) => { setTopicId(value); setQuestions([]) }}
+          onTopic={setTopicId}
           showTopic={!autoDetect}
           allSubjectsLabel={autoDetect ? 'All subjects in this program' : undefined}
         />
@@ -682,12 +583,12 @@ function PdfImportPanel() {
           </div>
         )}
         <div className="flex gap-2">
-          <button type="button" className="btn btn-primary flex-1" onClick={() => void extract()} disabled={busy || !file}>
-            {busy ? <LoaderCircle size={17} className="animate-spin" /> : <FileUp size={17} />}
-            {busy ? 'Extracting…' : 'Extract questions'}
+          <button type="button" className="btn btn-primary flex-1" onClick={() => void extract()} disabled={pdf.running || !file}>
+            {pdf.running ? <LoaderCircle size={17} className="animate-spin" /> : <FileUp size={17} />}
+            {pdf.running ? 'Extracting…' : 'Extract questions'}
           </button>
-          {busy && (
-            <button type="button" className="btn btn-secondary !px-3" onClick={cancel}>
+          {pdf.running && (
+            <button type="button" className="btn btn-secondary !px-3" onClick={cancelPdfJob}>
               <X size={16} /> Cancel
             </button>
           )}
@@ -698,41 +599,45 @@ function PdfImportPanel() {
       </aside>
 
       <div>
-        {error && <ErrorNote message={error} />}
-        {busy && progress && (
+        {localError && <ErrorNote message={localError} />}
+        {pdf.error && <ErrorNote message={pdf.error} />}
+        {pdf.running && pdf.progress && (
           <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 p-3 text-xs font-semibold text-brand-700 dark:border-brand-800 dark:bg-brand-500/10 dark:text-brand-300">
             <LoaderCircle size={14} className="animate-spin" />
-            <span className="flex-1">{progress}</span>
+            <span className="flex-1">{pdf.progress}</span>
             <span className="rounded-full bg-brand-600 px-2 py-0.5 text-[0.65rem] text-white">
-              {savedCount} saved
+              {pdf.savedCount} saved
+            </span>
+            <span className="w-full text-[0.65rem] font-medium opacity-80">
+              You can switch tabs or pages — extraction continues.
             </span>
           </div>
         )}
-        {!busy && cancelled && (
+        {!pdf.running && pdf.cancelled && (
           <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
-            <AlertCircle size={14} /> Cancelled — {savedCount} question{savedCount === 1 ? '' : 's'} saved to your bank.
+            <AlertCircle size={14} /> Cancelled — {pdf.savedCount} question{pdf.savedCount === 1 ? '' : 's'} saved to your bank.
             <Link to="/practice" className="ml-auto inline-flex items-center gap-1 underline">
               Practice <ArrowRight size={13} />
             </Link>
           </div>
         )}
-        {!busy && finished && savedCount > 0 && (
+        {!pdf.running && pdf.finished && pdf.savedCount > 0 && (
           <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
-            <Check size={14} /> Extraction complete — {savedCount} question{savedCount === 1 ? '' : 's'} saved to your bank.
+            <Check size={14} /> Extraction complete — {pdf.savedCount} question{pdf.savedCount === 1 ? '' : 's'} saved to your bank.
             <Link to="/practice" className="ml-auto inline-flex items-center gap-1 underline">
               Practice <ArrowRight size={13} />
             </Link>
           </div>
         )}
-        {busy && questions.length === 0 ? (
-          <LoadingCard message={progress || 'Reading your PDF and classifying each question…'} />
-        ) : questions.length === 0 && !cancelled && !finished ? (
+        {pdf.running && pdf.questions.length === 0 ? (
+          <LoadingCard message={pdf.progress || 'Reading your PDF and classifying each question…'} />
+        ) : pdf.questions.length === 0 && !pdf.cancelled && !pdf.finished ? (
           <EmptyState icon="📄" title="No questions extracted yet" description="Choose a PDF, then extract. Questions are grouped by the topic Gemini detects for each one." />
         ) : (
           <div className="space-y-5">
             {autoDetect && (
               <div className="flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 p-3 text-xs font-semibold text-brand-700 dark:border-brand-800 dark:bg-brand-500/10 dark:text-brand-300">
-                <Sparkles size={14} /> {groups.size} topic{groups.size === 1 ? '' : 's'} detected across {questions.length} questions
+                <Sparkles size={14} /> {groups.size} topic{groups.size === 1 ? '' : 's'} detected across {pdf.questions.length} questions
               </div>
             )}
             {[...groups.entries()].map(([topicKey, items]) => (
@@ -747,10 +652,7 @@ function PdfImportPanel() {
                     Practice <ArrowRight size={13} />
                   </Link>
                 </div>
-                <QuestionPreview
-                  questions={items}
-                  onRemove={(id) => setQuestions((current) => current.filter((item) => item.id !== id))}
-                />
+                <QuestionPreview questions={items} onRemove={removePdfQuestion} />
               </section>
             ))}
           </div>
@@ -910,7 +812,7 @@ function ManualPanel() {
 
       <div>
         {error && <ErrorNote message={error} />}
-        <SaveBar count={draft.length} busy={busy} saved={saved} onSave={() => void saveAll()} onDiscard={() => { setDraft([]); setSaved(false) }} saveLabel="Save questions" />
+        <SaveBar count={draft.length} busy={busy} saved={saved} onSave={() => void saveAll()} onDiscard={() => { setDraft([]); setSaved(false) }} />
         {draft.length === 0 && !saved ? (
           <EmptyState icon="✍️" title="No questions typed yet" description="Fill in the form and add questions to your draft. Save them together when you're done." />
         ) : (
@@ -918,7 +820,6 @@ function ManualPanel() {
             questions={draft}
             onRemove={(id) => setDraft((current) => current.filter((item) => item.id !== id))}
             onEdit={editQuestion}
-            countLabel="Solution"
           />
         )}
       </div>
@@ -927,27 +828,8 @@ function ManualPanel() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Shared bits + page                                                         */
+/* Page                                                                       */
 /* -------------------------------------------------------------------------- */
-
-function ErrorNote({ message }: { message: string }) {
-  return (
-    <div className="mb-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-800 dark:bg-rose-500/10 dark:text-rose-300">
-      <AlertCircle size={16} className="mt-0.5 shrink-0" />
-      <span>{message}</span>
-    </div>
-  )
-}
-
-function LoadingCard({ message }: { message: string }) {
-  return (
-    <div className="card flex min-h-72 flex-col items-center justify-center gap-3 text-center">
-      <span className="size-9 animate-spin rounded-full border-2 border-line border-t-brand-500" />
-      <p className="text-sm font-semibold">Working…</p>
-      <p className="text-xs text-muted">{message}</p>
-    </div>
-  )
-}
 
 export function QuestionGenerator() {
   const [tab, setTab] = useState<Tab>('generate')
@@ -971,10 +853,7 @@ export function QuestionGenerator() {
             key={id}
             type="button"
             onClick={() => setTab(id)}
-            className={cn(
-              'btn !text-xs',
-              tab === id ? 'btn-primary' : 'btn-secondary',
-            )}
+            className={cn('btn !text-xs', tab === id ? 'btn-primary' : 'btn-secondary')}
           >
             <Icon size={15} /> {label}
           </button>
