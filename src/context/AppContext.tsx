@@ -1,0 +1,233 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
+import { seedCatalog } from '../data/seed'
+import { clearAttempts, getAttempts, getCatalog, saveAttempt } from '../lib/api'
+import { readLocal, writeLocal } from '../lib/local'
+import { DEFAULT_SETTINGS } from '../lib/types'
+import type {
+  Attempt,
+  Catalog,
+  Flashcard,
+  Program,
+  ProgramId,
+  Question,
+  StudySettings,
+  Subject,
+  Topic,
+} from '../lib/types'
+import { percent } from '../lib/utils'
+import { useAuth } from './AuthContext'
+
+const SETTINGS_KEY = 'settings'
+
+export interface TopicMastery {
+  answered: number
+  correct: number
+  accuracy: number
+  attempts: number
+  lastPracticed: string | null
+}
+
+export interface ProgramMastery {
+  answered: number
+  correct: number
+  accuracy: number
+  topicsTouched: number
+  topicsTotal: number
+  lastPracticed: string | null
+}
+
+interface AppContextValue {
+  catalog: Catalog
+  attempts: Attempt[]
+  loadingAttempts: boolean
+  settings: StudySettings
+  updateSettings: (patch: Partial<StudySettings>) => void
+  recordAttempt: (attempt: Attempt) => Promise<void>
+  clearProgress: () => Promise<void>
+  program: (id: ProgramId | string | undefined) => Program | undefined
+  subject: (id: string | undefined) => Subject | undefined
+  topic: (id: string | undefined) => Topic | undefined
+  subjectsForProgram: (programId: ProgramId) => Subject[]
+  topicsForSubject: (subjectId: string) => Topic[]
+  questionsForTopic: (topicId: string) => Question[]
+  questionsForProgram: (programId: ProgramId) => Question[]
+  flashcardsForProgram: (programId: ProgramId) => Flashcard[]
+  attemptsForProgram: (programId: ProgramId) => Attempt[]
+  topicMastery: (topicId: string) => TopicMastery
+  programMastery: (programId: ProgramId) => ProgramMastery
+}
+
+const AppContext = createContext<AppContextValue | null>(null)
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth()
+  const [catalog, setCatalog] = useState<Catalog>(seedCatalog)
+  const [attempts, setAttempts] = useState<Attempt[]>([])
+  const [loadingAttempts, setLoadingAttempts] = useState(false)
+  const [settings, setSettings] = useState<StudySettings>(() =>
+    readLocal<StudySettings>(SETTINGS_KEY, DEFAULT_SETTINGS),
+  )
+
+  useEffect(() => {
+    void getCatalog().then((next) => setCatalog(next))
+  }, [])
+
+  useEffect(() => {
+    writeLocal(SETTINGS_KEY, settings)
+    document.documentElement.classList.toggle('dark', settings.theme === 'dark')
+  }, [settings])
+
+  const userId = user?.id
+  useEffect(() => {
+    if (!userId) {
+      setAttempts([])
+      return
+    }
+    let active = true
+    setLoadingAttempts(true)
+    void getAttempts(userId).then((items) => {
+      if (!active) return
+      setAttempts(items)
+      setLoadingAttempts(false)
+    })
+    return () => {
+      active = false
+    }
+  }, [userId])
+
+  const updateSettings = useCallback((patch: Partial<StudySettings>) => {
+    setSettings((current) => ({ ...current, ...patch }))
+  }, [])
+
+  const recordAttempt = useCallback(
+    async (attempt: Attempt) => {
+      const complete: Attempt = { ...attempt, userId: user?.id ?? 'guest' }
+      setAttempts((current) => [complete, ...current])
+      await saveAttempt(complete)
+    },
+    [user?.id],
+  )
+
+  const clearProgress = useCallback(async () => {
+    if (!user) return
+    await clearAttempts(user.id)
+    setAttempts([])
+  }, [user])
+
+  const value = useMemo<AppContextValue>(() => {
+    const program = (id: ProgramId | string | undefined) =>
+      catalog.programs.find((item) => item.id === id)
+    const subject = (id: string | undefined) =>
+      catalog.subjects.find((item) => item.id === id)
+    const topic = (id: string | undefined) => catalog.topics.find((item) => item.id === id)
+    const subjectsForProgram = (programId: ProgramId) =>
+      catalog.subjects.filter((item) => item.programId === programId)
+    const topicsForSubject = (subjectId: string) =>
+      catalog.topics.filter((item) => item.subjectId === subjectId)
+    const questionsForTopic = (topicId: string) =>
+      catalog.questions.filter((item) => item.topicId === topicId)
+    const questionsForProgram = (programId: ProgramId) =>
+      catalog.questions.filter((item) => item.programId === programId)
+    const flashcardsForProgram = (programId: ProgramId) =>
+      catalog.flashcards.filter((item) => item.programId === programId)
+    const attemptsForProgram = (programId: ProgramId) =>
+      attempts.filter((item) => item.programId === programId)
+
+    const topicMastery = (topicId: string): TopicMastery => {
+      let answered = 0
+      let correct = 0
+      let count = 0
+      let lastPracticed: string | null = null
+      for (const attempt of attempts) {
+        const relevant = attempt.answers.filter((answer) => {
+          const question = catalog.questions.find((item) => item.id === answer.questionId)
+          return question?.topicId === topicId
+        })
+        if (relevant.length === 0) continue
+        count += 1
+        answered += relevant.length
+        correct += relevant.filter((answer) => answer.correct).length
+        if (!lastPracticed || attempt.completedAt > lastPracticed) {
+          lastPracticed = attempt.completedAt
+        }
+      }
+      return {
+        answered,
+        correct,
+        accuracy: percent(correct, answered),
+        attempts: count,
+        lastPracticed,
+      }
+    }
+
+    const programMastery = (programId: ProgramId): ProgramMastery => {
+      const programAttempts = attemptsForProgram(programId)
+      const answered = programAttempts.reduce((sum, item) => sum + item.answers.length, 0)
+      const correct = programAttempts.reduce(
+        (sum, item) => sum + item.answers.filter((answer) => answer.correct).length,
+        0,
+      )
+      const touched = new Set<string>()
+      for (const attempt of programAttempts) {
+        for (const answer of attempt.answers) {
+          const question = catalog.questions.find((item) => item.id === answer.questionId)
+          if (question) touched.add(question.topicId)
+        }
+      }
+      const topicsTotal = catalog.topics.filter((item) => item.programId === programId).length
+      return {
+        answered,
+        correct,
+        accuracy: percent(correct, answered),
+        topicsTouched: touched.size,
+        topicsTotal,
+        lastPracticed: programAttempts[0]?.completedAt ?? null,
+      }
+    }
+
+    return {
+      catalog,
+      attempts,
+      loadingAttempts,
+      settings,
+      updateSettings,
+      recordAttempt,
+      clearProgress,
+      program,
+      subject,
+      topic,
+      subjectsForProgram,
+      topicsForSubject,
+      questionsForTopic,
+      questionsForProgram,
+      flashcardsForProgram,
+      attemptsForProgram,
+      topicMastery,
+      programMastery,
+    }
+  }, [
+    catalog,
+    attempts,
+    loadingAttempts,
+    settings,
+    updateSettings,
+    recordAttempt,
+    clearProgress,
+  ])
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>
+}
+
+export function useApp(): AppContextValue {
+  const context = useContext(AppContext)
+  if (!context) throw new Error('useApp must be used inside AppProvider')
+  return context
+}
