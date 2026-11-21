@@ -7,6 +7,25 @@
 import type { Difficulty, ProgramId, Question } from '../src/lib/types.ts'
 
 export const GEMINI_MODEL = 'gemini-3.8-flash'
+export const FALLBACK_MODEL = 'gemini-3.6-flash'
+
+/** Only these failures should trigger a retry on the fallback model. */
+class ModelOverloadedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ModelOverloadedError'
+  }
+}
+
+function isOverload(status: number, message: string): boolean {
+  return (
+    status === 429 ||
+    status === 503 ||
+    /high demand|overloaded|resource exhausted|capacity|too many requests|try again later|temporarily unavailable/i.test(
+      message,
+    )
+  )
+}
 
 export interface GenerateQuestionsInput {
   programId: ProgramId
@@ -143,14 +162,15 @@ function toQuestion(item: GeminiQuestion, input: GenerateQuestionsInput): Questi
   }
 }
 
-async function callGemini(
+async function callModel(
+  model: string,
   parts: GeminiPart[],
   apiKey: string,
   input: GenerateQuestionsInput,
   maxCount?: number,
 ): Promise<Question[]> {
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
       method: 'POST',
       headers: {
@@ -175,6 +195,7 @@ async function callGemini(
     const message =
       (raw.error as { message?: string } | undefined)?.message ??
       `Gemini API returned HTTP ${response.status}.`
+    if (isOverload(response.status, message)) throw new ModelOverloadedError(message)
     throw new Error(message)
   }
 
@@ -199,6 +220,22 @@ async function callGemini(
     throw new Error('No valid questions were found. Please try again.')
   }
   return limited
+}
+
+/** Tries 3.8 Flash first; falls back to 3.6 Flash when Google reports overload. */
+async function callGemini(
+  parts: GeminiPart[],
+  apiKey: string,
+  input: GenerateQuestionsInput,
+  maxCount?: number,
+): Promise<Question[]> {
+  try {
+    return await callModel(GEMINI_MODEL, parts, apiKey, input, maxCount)
+  } catch (error) {
+    if (!(error instanceof ModelOverloadedError)) throw error
+    console.warn(`[BoardPrep] ${GEMINI_MODEL} is overloaded — retrying with ${FALLBACK_MODEL}.`)
+    return callModel(FALLBACK_MODEL, parts, apiKey, input, maxCount)
+  }
 }
 
 /** Generates fresh questions from a topic description. */
