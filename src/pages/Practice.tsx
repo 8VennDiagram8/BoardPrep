@@ -95,7 +95,7 @@ export function Practice() {
     [questionsForProgram, questionsForTopic, settings.examMinutes, topic],
   )
 
-  // Honour deep links such as /practice?program=ecele&topic=ecele-math-algebra
+  // Honour deep links such as /practice?program=ecele&topic=ecele-elecs-dc
   useEffect(() => {
     const search = searchParams.toString()
     if (!search || autoStartedRef.current === search) return
