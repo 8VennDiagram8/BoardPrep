@@ -8,6 +8,13 @@ import type { Difficulty, ProgramId, Question } from '../src/lib/types.ts'
 
 export const GEMINI_MODEL = 'gemini-3.6-flash'
 
+export interface TopicCandidate {
+  id: string
+  name: string
+  subjectId: string
+  subjectName: string
+}
+
 export interface GenerateQuestionsInput {
   programId: ProgramId
   subjectId: string
@@ -17,6 +24,9 @@ export interface GenerateQuestionsInput {
   topicName: string
   count: number
   difficulty: 'mixed' | Difficulty
+  /** When importing a mixed PDF, let Gemini pick the topic per question. */
+  autoDetectTopic?: boolean
+  topics?: TopicCandidate[]
 }
 
 interface GeminiQuestion {
@@ -25,6 +35,7 @@ interface GeminiQuestion {
   answerIndex?: unknown
   explanation?: unknown
   difficulty?: unknown
+  topicId?: unknown
 }
 
 type GeminiPart =
@@ -49,6 +60,7 @@ const responseSchema = {
           answerIndex: { type: 'INTEGER' },
           explanation: { type: 'STRING' },
           difficulty: { type: 'STRING', enum: ['easy', 'medium', 'hard'] },
+          topicId: { type: 'STRING' },
         },
         required: ['prompt', 'options', 'answerIndex', 'explanation', 'difficulty'],
       },
@@ -86,13 +98,24 @@ function buildPrompt(input: GenerateQuestionsInput): string {
 }
 
 function buildExtractPrompt(input: GenerateQuestionsInput, fileName: string): string {
+  const candidates = (input.topics ?? []).slice(0, 100)
+  const classifyInstruction = input.autoDetectTopic && candidates.length > 0
+    ? [
+        '',
+        'The PDF questions may be in random order and cover different topics. For EACH question, choose exactly one topicId from this list:',
+        ...candidates.map((item) => `- ${item.id} = ${item.name} (subject: ${item.subjectName})`),
+        '',
+        'Use the topicId field for your choice. Pick the single best match based on what the question actually tests — do not put every question in the same topic.',
+      ]
+    : ['', `Topic for all questions: ${input.topicName}`]
+
   return [
     'You extract multiple-choice board exam questions from a PDF document.',
     '',
     `Source file: ${fileName}`,
     `Tag every extracted question with this board / program: ${input.programName} (${input.programId.toUpperCase()})`,
-    `Subject: ${input.subjectName}`,
-    `Topic: ${input.topicName}`,
+    `Default subject: ${input.subjectName}`,
+    ...classifyInstruction,
     '',
     'Requirements:',
     '- Extract EVERY distinct multiple-choice question present in the PDF, including any that appear in a separate answer-key section.',
@@ -117,7 +140,12 @@ function normaliseDifficulty(value: unknown): Difficulty {
   return value === 'easy' || value === 'medium' || value === 'hard' ? value : 'medium'
 }
 
-function toQuestion(item: GeminiQuestion, input: GenerateQuestionsInput): Question | null {
+function toQuestion(
+  item: GeminiQuestion,
+  input: GenerateQuestionsInput,
+  candidates: TopicCandidate[] = [],
+  fallbackTopicId = input.topicId,
+): Question | null {
   const prompt = typeof item.prompt === 'string' ? item.prompt.trim() : ''
   const explanation = typeof item.explanation === 'string' ? item.explanation.trim() : ''
   const options = Array.isArray(item.options)
@@ -128,11 +156,18 @@ function toQuestion(item: GeminiQuestion, input: GenerateQuestionsInput): Questi
   if (!prompt || !explanation || options.length !== 4 || options.some((option) => !option)) return null
   if (answerIndex < 0 || answerIndex > 3) return null
 
+  const detected = typeof item.topicId === 'string' ? item.topicId.trim() : ''
+  const chosen =
+    candidates.find((candidate) => candidate.id === detected) ??
+    candidates.find((candidate) => candidate.id === fallbackTopicId)
+  const topicId = chosen?.id ?? fallbackTopicId
+  const subjectId = chosen?.subjectId ?? input.subjectId
+
   return {
-    id: `gen-${input.topicId}-${crypto.randomUUID()}`,
+    id: `gen-${topicId}-${crypto.randomUUID()}`,
     programId: input.programId,
-    subjectId: input.subjectId,
-    topicId: input.topicId,
+    subjectId,
+    topicId,
     prompt,
     options,
     answerIndex,
@@ -189,9 +224,11 @@ async function callGemini(
     throw new Error('Gemini returned a response that could not be parsed. Please try again.')
   }
 
+  const topicCandidates = input.autoDetectTopic ? (input.topics ?? []).slice(0, 100) : []
+  const fallbackTopicId = input.topicId || topicCandidates[0]?.id || ''
   const items = Array.isArray(parsed.questions) ? parsed.questions : []
   const questions = items
-    .map((item) => toQuestion(item, input))
+    .map((item) => toQuestion(item, input, topicCandidates, fallbackTopicId))
     .filter((item): item is Question => item !== null)
 
   const limited = maxCount === undefined ? questions : questions.slice(0, maxCount)
@@ -199,6 +236,23 @@ async function callGemini(
     throw new Error('No valid questions were found. Please try again.')
   }
   return limited
+}
+
+/** Keeps only usable topic candidates supplied by the client. */
+export function sanitizeTopics(value: unknown): TopicCandidate[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter((item): item is Record<string, unknown> =>
+      Boolean(item) && typeof item === 'object' &&
+      typeof item.id === 'string' && typeof item.name === 'string' &&
+      typeof item.subjectId === 'string' && typeof item.subjectName === 'string')
+    .slice(0, 100)
+    .map((item) => ({
+      id: item.id as string,
+      name: item.name as string,
+      subjectId: item.subjectId as string,
+      subjectName: item.subjectName as string,
+    }))
 }
 
 /** Generates fresh questions from a topic description. */

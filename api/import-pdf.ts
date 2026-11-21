@@ -1,4 +1,8 @@
-import { extractQuestionsFromPdf, type GenerateQuestionsInput } from '../server/gemini.ts'
+import {
+  extractQuestionsFromPdf,
+  sanitizeTopics,
+  type GenerateQuestionsInput,
+} from '../server/gemini.ts'
 
 interface ImportBody extends Partial<GenerateQuestionsInput> {
   fileName?: string
@@ -28,8 +32,13 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   }
 
   const body = req.body ?? {}
-  if (!body.programId || !body.subjectId || !body.topicId || !body.fileData) {
-    return res.status(400).json({ error: 'A topic and a PDF file are required.' })
+  if (
+    !body.programId ||
+    !body.subjectId ||
+    !body.fileData ||
+    (!body.autoDetectTopic && !body.topicId)
+  ) {
+    return res.status(400).json({ error: 'A topic (or auto-detect) and a PDF file are required.' })
   }
 
   // Vercel limits request bodies to 4.5 MB; base64 adds ~33%.
@@ -42,12 +51,14 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       {
         programId: body.programId,
         subjectId: body.subjectId,
-        topicId: body.topicId,
+        topicId: body.topicId ?? '',
         programName: body.programName ?? body.programId.toUpperCase(),
         subjectName: body.subjectName ?? body.subjectId,
         topicName: body.topicName ?? 'Topic',
         count: 0,
         difficulty: body.difficulty ?? 'mixed',
+        autoDetectTopic: body.autoDetectTopic ?? false,
+        topics: sanitizeTopics(body.topics),
       },
       apiKey,
       body.fileData,

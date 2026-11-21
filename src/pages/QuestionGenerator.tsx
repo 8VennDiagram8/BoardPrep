@@ -19,6 +19,7 @@ import {
   GEMINI_MODEL,
   importQuestionsFromPdf,
   requestGeneratedQuestions,
+  type TopicCandidate,
 } from '../lib/gemini'
 import { createId } from '../lib/local'
 import type { Difficulty, ProgramId, Question } from '../lib/types'
@@ -36,11 +37,12 @@ interface TopicPickerProps {
   onTopic: (value: string) => void
   showTopic?: boolean
   topicCounts?: (topicId: string) => number
+  allSubjectsLabel?: string
 }
 
 function TopicPicker({
   programId, subjectId, topicId, onProgram, onSubject, onTopic,
-  showTopic = true, topicCounts,
+  showTopic = true, topicCounts, allSubjectsLabel,
 }: TopicPickerProps) {
   const { catalog, subjectsForProgram, topicsForSubject } = useApp()
   const subjects = subjectsForProgram(programId)
@@ -59,6 +61,7 @@ function TopicPicker({
       <label className="mb-4 block">
         <span className="mb-1.5 block text-xs font-semibold text-muted">Subject</span>
         <select className="input" value={subjectId} onChange={(event) => onSubject(event.target.value)}>
+          {allSubjectsLabel && <option value="">{allSubjectsLabel}</option>}
           {subjects.map((item) => (
             <option key={item.id} value={item.id}>{item.code} — {item.name}</option>
           ))}
@@ -392,11 +395,23 @@ function PdfImportPanel() {
   const [programId, setProgramId] = useState<ProgramId>('ecele')
   const [subjectId, setSubjectId] = useState(() => subjectsForProgram('ecele')[0]?.id ?? '')
   const [topicId, setTopicId] = useState('')
+  const [autoDetect, setAutoDetect] = useState(true)
   const [file, setFile] = useState<File | null>(null)
   const [questions, setQuestions] = useState<Question[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+
+  const candidates: TopicCandidate[] = (
+    subjectId
+      ? catalog.topics.filter((item) => item.subjectId === subjectId)
+      : catalog.topics.filter((item) => item.programId === programId)
+  ).map((item) => ({
+    id: item.id,
+    name: item.name,
+    subjectId: item.subjectId,
+    subjectName: catalog.subjects.find((subject) => subject.id === item.subjectId)?.name ?? '',
+  }))
 
   function handleProgram(next: ProgramId) {
     setProgramId(next)
@@ -432,6 +447,14 @@ function PdfImportPanel() {
       setError('Choose a PDF file first.')
       return
     }
+    if (!autoDetect && !topicId) {
+      setError('Choose a topic, or turn on auto-detect.')
+      return
+    }
+    if (autoDetect && candidates.length === 0) {
+      setError('No topics are available to classify the questions into.')
+      return
+    }
     setBusy(true)
     setError(null)
     setSaved(false)
@@ -444,14 +467,20 @@ function PdfImportPanel() {
       const found = await importQuestionsFromPdf({
         programId,
         subjectId,
-        topicId,
+        topicId: autoDetect ? (candidates[0]?.id ?? topicId) : topicId,
         programName: catalog.programs.find((item) => item.id === programId)?.name ?? programId,
-        subjectName: catalog.subjects.find((item) => item.id === subjectId)?.name ?? subjectId,
-        topicName: catalog.topics.find((item) => item.id === topicId)?.name ?? 'Topic',
+        subjectName: subjectId
+          ? catalog.subjects.find((item) => item.id === subjectId)?.name ?? subjectId
+          : 'Mixed subjects',
+        topicName: autoDetect
+          ? 'Detect per question'
+          : catalog.topics.find((item) => item.id === topicId)?.name ?? 'Topic',
         count: 0,
         difficulty: 'mixed',
         fileName: file.name,
         fileData: base64,
+        autoDetectTopic: autoDetect,
+        topics: candidates,
       })
       setQuestions(found)
       if (found.length === 0) setError('No questions were found in this PDF.')
@@ -471,10 +500,37 @@ function PdfImportPanel() {
     setFile(null)
   }
 
+  const groups = new Map<string, Question[]>()
+  for (const question of questions) {
+    const group = groups.get(question.topicId) ?? []
+    group.push(question)
+    groups.set(question.topicId, group)
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
       <aside className="card h-fit p-5">
         <h2 className="heading mb-4 text-base">Import from PDF</h2>
+        <button
+          type="button"
+          onClick={() => { setAutoDetect((value) => !value); setQuestions([]) }}
+          className={cn(
+            'mb-4 flex w-full items-center justify-between gap-2 rounded-xl border p-3 text-left text-xs transition',
+            autoDetect
+              ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300'
+              : 'border-line bg-surface-2 text-muted hover:border-brand-300',
+          )}
+        >
+          <span className="flex items-center gap-2 font-semibold">
+            <Sparkles size={14} /> Auto-detect topic per question
+          </span>
+          <span className="font-bold">{autoDetect ? 'On' : 'Off'}</span>
+        </button>
+        <p className="mb-4 -mt-2 text-[0.7rem] leading-relaxed text-muted">
+          {autoDetect
+            ? 'Gemini reads each question and files it under the most relevant topic, even if the PDF is randomly ordered.'
+            : 'Every extracted question will be saved under the topic you choose below.'}
+        </p>
         <TopicPicker
           programId={programId}
           subjectId={subjectId}
@@ -482,6 +538,8 @@ function PdfImportPanel() {
           onProgram={handleProgram}
           onSubject={handleSubject}
           onTopic={(value) => { setTopicId(value); setQuestions([]) }}
+          showTopic={!autoDetect}
+          allSubjectsLabel={autoDetect ? 'All subjects in this program' : undefined}
         />
         <label className="mb-4 block">
           <span className="mb-1.5 block text-xs font-semibold text-muted">PDF file</span>
@@ -502,7 +560,7 @@ function PdfImportPanel() {
             <span className="text-muted">{(file.size / 1024 / 1024).toFixed(1)} MB</span>
           </div>
         )}
-        <button type="button" className="btn btn-primary w-full" onClick={() => void extract()} disabled={busy || !file || !topicId}>
+        <button type="button" className="btn btn-primary w-full" onClick={() => void extract()} disabled={busy || !file}>
           {busy ? <LoaderCircle size={17} className="animate-spin" /> : <FileUp size={17} />}
           {busy ? 'Extracting…' : 'Extract questions'}
         </button>
@@ -512,11 +570,35 @@ function PdfImportPanel() {
         {error && <ErrorNote message={error} />}
         <SaveBar count={questions.length} busy={busy} saved={saved} onSave={() => void saveAll()} onDiscard={() => { setQuestions([]); setSaved(false) }} />
         {busy && questions.length === 0 ? (
-          <LoadingCard message="Reading your PDF and extracting questions…" />
+          <LoadingCard message="Reading your PDF and classifying each question…" />
         ) : questions.length === 0 && !saved ? (
-          <EmptyState icon="📄" title="No questions extracted yet" description="Choose a PDF and a topic, then extract. Review the results before saving them to the question bank." />
+          <EmptyState icon="📄" title="No questions extracted yet" description="Choose a PDF, then extract. Questions are grouped by the topic Gemini detects for each one." />
         ) : (
-          <QuestionPreview questions={questions} onRemove={(id) => setQuestions((current) => current.filter((item) => item.id !== id))} />
+          <div className="space-y-5">
+            {autoDetect && (
+              <div className="flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 p-3 text-xs font-semibold text-brand-700 dark:border-brand-800 dark:bg-brand-500/10 dark:text-brand-300">
+                <Sparkles size={14} /> {groups.size} topic{groups.size === 1 ? '' : 's'} detected across {questions.length} questions
+              </div>
+            )}
+            {[...groups.entries()].map(([topicKey, items]) => (
+              <section key={topicKey}>
+                <div className="mb-2 flex items-center gap-2">
+                  <h2 className="heading text-sm">{catalog.topics.find((item) => item.id === topicKey)?.name ?? 'Unassigned'}</h2>
+                  <Badge tone="brand">{items.length} items</Badge>
+                  <Link
+                    to={`/practice?program=${programId}&topic=${topicKey}`}
+                    className="ml-auto flex items-center gap-1 text-xs font-semibold text-brand-600 hover:underline dark:text-brand-400"
+                  >
+                    Practice <ArrowRight size={13} />
+                  </Link>
+                </div>
+                <QuestionPreview
+                  questions={items}
+                  onRemove={(id) => setQuestions((current) => current.filter((item) => item.id !== id))}
+                />
+              </section>
+            ))}
+          </div>
         )}
       </div>
     </div>

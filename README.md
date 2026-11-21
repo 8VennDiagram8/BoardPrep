@@ -53,7 +53,7 @@ The app falls back to the bundled catalog if Supabase is unreachable, so it stil
 Open **Question Bank** in the sidebar. It has three tabs:
 
 - **Generate with AI** — pick a board, subject and scope (single topic, all topics in a subject, or all topics in the program), choose questions per topic, then generate. Every item has four options, one correct answer and a written solution.
-- **Import PDF** — upload a PDF (up to 3 MB) for a chosen topic. Gemini reads the document, extracts its questions and answer key, and returns structured items with solutions. Review before saving.
+- **Import PDF** — upload a PDF (up to 3 MB). Gemini reads the document, extracts its questions and answer key, and returns structured items with solutions. With **auto-detect topic per question** on (default), each question is classified into the most relevant topic — even when the questionnaire is randomly ordered — and the preview groups questions by detected topic. You can turn it off to tag everything under one chosen topic.
 - **Type manually** — enter a question, four options, mark the correct one, and write the solution. Build a draft and save it when done; you can edit draft items before saving.
 
 Saved questions immediately appear in practice, mock exams, analytics and flashcard topics.

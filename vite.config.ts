@@ -4,6 +4,7 @@ import { defineConfig, loadEnv } from 'vite'
 import {
   extractQuestionsFromPdf,
   generateQuestions,
+  sanitizeTopics,
   type GenerateQuestionsInput,
 } from './server/gemini.ts'
 
@@ -78,6 +79,8 @@ function geminiApiPlugin() {
               topicName: body.topicName ?? 'Topic',
               count: 0,
               difficulty: 'mixed',
+              autoDetectTopic: body.autoDetectTopic ?? false,
+              topics: sanitizeTopics(body.topics),
             },
             getApiKey(),
             body.fileData,

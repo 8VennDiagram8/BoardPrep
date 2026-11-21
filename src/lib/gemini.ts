@@ -32,10 +32,19 @@ export async function requestGeneratedQuestions(request: GenerateRequest): Promi
   return data.questions ?? []
 }
 
+export interface TopicCandidate {
+  id: string
+  name: string
+  subjectId: string
+  subjectName: string
+}
+
 export interface PdfImportRequest extends GenerateRequest {
   fileName: string
   /** Base64-encoded PDF bytes, without the data-URL prefix. */
   fileData: string
+  autoDetectTopic?: boolean
+  topics?: TopicCandidate[]
 }
 
 export async function importQuestionsFromPdf(request: PdfImportRequest): Promise<Question[]> {
