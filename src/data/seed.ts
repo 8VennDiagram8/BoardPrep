@@ -45,7 +45,7 @@ export const subjects: Subject[] = [
   {
     id: 'ecele-est',
     programId: 'ecele',
-    name: 'Electronic Systems & Design / Signals and Communications',
+    name: 'Electronics Systems and Technologies',
     code: 'EST',
     description: 'Signals, communications, transmission, data networks and CAD.',
     glyph: '📶',

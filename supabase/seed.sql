@@ -7,7 +7,7 @@ on conflict (id) do nothing;
 
 insert into public.subjects (id, program_id, name, code, description, glyph) values
   ('ecele-elecs', 'ecele', 'Electronics Engineering', 'ELECS', 'DC/AC circuits, devices, logic design, microcontrollers and control systems.', '⚡'),
-  ('ecele-est', 'ecele', 'Electronic Systems & Design / Signals and Communications', 'EST', 'Signals, communications, transmission, data networks and CAD.', '📶'),
+  ('ecele-est', 'ecele', 'Electronics Systems and Technologies', 'EST', 'Signals, communications, transmission, data networks and CAD.', '📶'),
   ('ecele-math', 'ecele', 'Mathematics', 'MATH', 'Calculus, differential equations, advanced engineering math and data analysis.', '∑'),
   ('ecele-geas', 'ecele', 'General Engineering & Applied Sciences', 'GEAS', 'Chemistry, physics, economics, management, laws, ethics, safety and CAD.', '📊'),
   ('ectle-basics', 'ectle', 'Basic Electronics', 'BASICS', 'Components, symbols, diodes and transistors.', '🧰'),
