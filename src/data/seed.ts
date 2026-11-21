@@ -13,10 +13,10 @@ export const programs: Program[] = [
   {
     id: 'ecele',
     code: 'ECELE',
-    name: 'Electronics and Communications Engineering Licensure Examination',
-    shortName: 'Electronics & Communications Engineering',
+    name: 'Electronics Engineering Licensure Examination',
+    shortName: 'Electronics Engineering',
     description:
-      'The PRC board exam for Electronics and Communications Engineers. Master circuits, devices, electromagnetics and communications.',
+      'The PRC board exam for Electronics Engineers. Master circuits, devices, electromagnetics and communications.',
     accent: 'indigo',
     glyph: '📡',
   },
@@ -37,7 +37,7 @@ export const subjects: Subject[] = [
   {
     id: 'ecele-elecs',
     programId: 'ecele',
-    name: 'Electrical & Electronic Circuits and Systems',
+    name: 'Electronics Engineering',
     code: 'ELECS',
     description: 'DC/AC circuits, devices, logic design, microcontrollers and control systems.',
     glyph: '⚡',
