@@ -6,6 +6,7 @@ import { Auth } from './pages/Auth'
 import { Dashboard } from './pages/Dashboard'
 import { Flashcards } from './pages/Flashcards'
 import { Practice } from './pages/Practice'
+import { QuestionGenerator } from './pages/QuestionGenerator'
 import { ProgramDetail } from './pages/ProgramDetail'
 import { Programs } from './pages/Programs'
 import { Progress } from './pages/Progress'
@@ -49,6 +50,7 @@ export default function App() {
               <Route path="/programs/:programId" element={<ProgramDetail />} />
               <Route path="/practice" element={<Practice />} />
               <Route path="/flashcards" element={<Flashcards />} />
+              <Route path="/generate" element={<QuestionGenerator />} />
               <Route path="/progress" element={<Progress />} />
               <Route path="/results/:attemptId" element={<Results />} />
               <Route path="/settings" element={<Settings />} />

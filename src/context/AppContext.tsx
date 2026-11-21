@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { seedCatalog } from '../data/seed'
-import { clearAttempts, getAttempts, getCatalog, saveAttempt } from '../lib/api'
+import { addQuestions, clearAttempts, getAttempts, getCatalog, saveAttempt } from '../lib/api'
 import { readLocal, writeLocal } from '../lib/local'
 import { DEFAULT_SETTINGS } from '../lib/types'
 import type {
@@ -52,6 +52,8 @@ interface AppContextValue {
   updateSettings: (patch: Partial<StudySettings>) => void
   recordAttempt: (attempt: Attempt) => Promise<void>
   clearProgress: () => Promise<void>
+  addQuestions: (questions: Question[]) => Promise<void>
+  refreshCatalog: () => Promise<void>
   program: (id: ProgramId | string | undefined) => Program | undefined
   subject: (id: string | undefined) => Subject | undefined
   topic: (id: string | undefined) => Topic | undefined
@@ -121,6 +123,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await clearAttempts(user.id)
     setAttempts([])
   }, [user])
+
+  const refreshCatalog = useCallback(async () => {
+    setCatalog(await getCatalog())
+  }, [])
+
+  const addGeneratedQuestions = useCallback(
+    async (questions: Question[]) => {
+      await addQuestions(questions)
+      setCatalog((current) => {
+        const ids = new Set(current.questions.map((question) => question.id))
+        return {
+          ...current,
+          questions: [...current.questions, ...questions.filter((question) => !ids.has(question.id))],
+        }
+      })
+    },
+    [],
+  )
 
   const value = useMemo<AppContextValue>(() => {
     const program = (id: ProgramId | string | undefined) =>
@@ -201,6 +221,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateSettings,
       recordAttempt,
       clearProgress,
+      addQuestions: addGeneratedQuestions,
+      refreshCatalog,
       program,
       subject,
       topic,
@@ -221,6 +243,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updateSettings,
     recordAttempt,
     clearProgress,
+    addGeneratedQuestions,
+    refreshCatalog,
   ])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

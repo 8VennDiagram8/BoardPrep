@@ -43,6 +43,9 @@ export interface Question {
   answerIndex: number
   explanation: string
   difficulty: Difficulty
+  /** Bundled questions use "seed"; AI-generated questions use "generated". */
+  source?: 'seed' | 'generated'
+  generatedAt?: string
 }
 
 export interface Flashcard {

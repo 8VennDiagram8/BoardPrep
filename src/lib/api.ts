@@ -11,9 +11,26 @@ import type {
   Topic,
 } from './types'
 
+const CUSTOM_QUESTIONS_KEY = 'custom-questions'
+
 /* -------------------------------------------------------------------------- */
 /* Catalog                                                                    */
 /* -------------------------------------------------------------------------- */
+
+/** Questions generated in the browser and not (yet) synced to Supabase. */
+export function getLocalQuestions(): Question[] {
+  return readLocal<Question[]>(CUSTOM_QUESTIONS_KEY, [])
+}
+
+function withLocalQuestions(catalog: Catalog): Catalog {
+  const custom = getLocalQuestions()
+  if (custom.length === 0) return catalog
+  const ids = new Set(catalog.questions.map((question) => question.id))
+  return {
+    ...catalog,
+    questions: [...catalog.questions, ...custom.filter((question) => !ids.has(question.id))],
+  }
+}
 
 /**
  * Loads programs, subjects, topics, questions and flashcards.
@@ -21,7 +38,7 @@ import type {
  * demo catalog so the reviewer is always usable — including offline.
  */
 export async function getCatalog(): Promise<Catalog> {
-  if (!supabase) return seedCatalog
+  if (!supabase) return withLocalQuestions(seedCatalog)
 
   try {
     const [programs, subjects, topics, questions, flashcards] = await Promise.all([
@@ -34,18 +51,51 @@ export async function getCatalog(): Promise<Catalog> {
 
     const results = [programs, subjects, topics, questions, flashcards]
     if (results.some((result) => result.error) || !programs.data?.length) {
-      return seedCatalog
+      return withLocalQuestions(seedCatalog)
     }
 
-    return {
+    return withLocalQuestions({
       programs: (programs.data ?? []) as Program[],
       subjects: (subjects.data ?? []) as Subject[],
       topics: (topics.data ?? []) as Topic[],
       questions: (questions.data ?? []) as Question[],
       flashcards: (flashcards.data ?? []) as Flashcard[],
-    }
+    })
   } catch {
-    return seedCatalog
+    return withLocalQuestions(seedCatalog)
+  }
+}
+
+/** Persists generated questions locally and, when available, to Supabase. */
+export async function addQuestions(questions: Question[]): Promise<void> {
+  if (questions.length === 0) return
+
+  const existing = getLocalQuestions()
+  const ids = new Set(existing.map((question) => question.id))
+  writeLocal(
+    CUSTOM_QUESTIONS_KEY,
+    [...existing, ...questions.filter((question) => !ids.has(question.id))].slice(0, 2000),
+  )
+
+  if (!supabase) return
+  try {
+    await supabase.from('questions').upsert(
+      questions.map((question) => ({
+        id: question.id,
+        program_id: question.programId,
+        subject_id: question.subjectId,
+        topic_id: question.topicId,
+        prompt: question.prompt,
+        options: question.options,
+        answer_index: question.answerIndex,
+        explanation: question.explanation,
+        difficulty: question.difficulty,
+        source: question.source ?? 'generated',
+        generated_at: question.generatedAt ?? null,
+      })),
+    )
+  } catch {
+    /* Local copy is already saved. */
   }
 }
 
