@@ -513,20 +513,47 @@ function PdfImportPanel() {
         <h2 className="heading mb-4 text-base">Import from PDF</h2>
         <button
           type="button"
+          role="switch"
+          aria-checked={autoDetect}
           onClick={() => { setAutoDetect((value) => !value); setQuestions([]) }}
           className={cn(
-            'mb-4 flex w-full items-center justify-between gap-2 rounded-xl border p-3 text-left text-xs transition',
+            'mb-2 flex w-full items-center gap-3 rounded-xl border p-3.5 text-left transition',
             autoDetect
-              ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300'
-              : 'border-line bg-surface-2 text-muted hover:border-brand-300',
+              ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/10'
+              : 'border-line bg-surface-2 hover:border-brand-300',
           )}
         >
-          <span className="flex items-center gap-2 font-semibold">
-            <Sparkles size={14} /> Auto-detect topic per question
+          <span className={cn(
+            'grid size-9 shrink-0 place-items-center rounded-lg transition-colors',
+            autoDetect ? 'bg-brand-600 text-white' : 'bg-bg-soft text-muted',
+          )}>
+            <Sparkles size={16} />
           </span>
-          <span className="font-bold">{autoDetect ? 'On' : 'Off'}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-bold text-ink">Auto-detect topic per question</span>
+            <span className="mt-0.5 block text-[0.7rem] leading-snug text-muted">
+              Let Gemini file each question into the right topic
+            </span>
+          </span>
+          <span className="flex shrink-0 flex-col items-end gap-1.5">
+            <span className={cn(
+              'text-[0.65rem] font-extrabold tracking-wide',
+              autoDetect ? 'text-brand-600 dark:text-brand-400' : 'text-muted',
+            )}>
+              {autoDetect ? 'ON' : 'OFF'}
+            </span>
+            <span className={cn(
+              'relative block h-6 w-11 rounded-full transition-colors',
+              autoDetect ? 'bg-brand-600' : 'bg-slate-400 dark:bg-slate-600',
+            )}>
+              <span className={cn(
+                'absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow transition-transform',
+                autoDetect && 'translate-x-5',
+              )} />
+            </span>
+          </span>
         </button>
-        <p className="mb-4 -mt-2 text-[0.7rem] leading-relaxed text-muted">
+        <p className="mb-4 text-[0.7rem] leading-relaxed text-muted">
           {autoDetect
             ? 'Gemini reads each question and files it under the most relevant topic, even if the PDF is randomly ordered.'
             : 'Every extracted question will be saved under the topic you choose below.'}
