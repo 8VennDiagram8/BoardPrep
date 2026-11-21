@@ -34,7 +34,7 @@ Open http://localhost:5173. With no environment variables the app runs in **demo
 
 1. Create a Supabase project.
 2. Run [`supabase/migrations/001_init.sql`](supabase/migrations/001_init.sql) in the SQL editor.
-3. Run [`supabase/migrations/002_generated_questions.sql`](supabase/migrations/002_generated_questions.sql) as well (adds generated-question columns and insert policy).
+3. Run [`supabase/migrations/002_generated_questions.sql`](supabase/migrations/002_generated_questions.sql) (adds generated-question columns and insert policy), then [`003_manual_question_source.sql`](supabase/migrations/003_manual_question_source.sql) (allows manually typed questions).
 4. Run [`supabase/seed.sql`](supabase/seed.sql) to load the starter question bank.
 5. Copy `.env.example` to `.env.local` and fill in your project URL and anon key.
 6. Restart the dev server.
