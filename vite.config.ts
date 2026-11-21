@@ -18,16 +18,11 @@ function geminiApiPlugin() {
         try {
           let raw = ''
           for await (const chunk of req) raw += chunk.toString()
-          const body = (raw ? JSON.parse(raw) : {}) as Partial<GenerateQuestionsInput> & { apiKey?: string }
+          const body = (raw ? JSON.parse(raw) : {}) as Partial<GenerateQuestionsInput>
 
-          const headerKey = req.headers?.['x-gemini-api-key']
-          const apiKey =
-            process.env.GEMINI_API_KEY ??
-            (Array.isArray(headerKey) ? headerKey[0] : headerKey) ??
-            body.apiKey
-
+          const apiKey = process.env.GEMINI_API_KEY
           if (!apiKey) {
-            throw new Error('No Gemini API key configured. Add GEMINI_API_KEY to .env.local or paste a key in the generator.')
+            throw new Error('GEMINI_API_KEY is not configured on the server. Add it to .env.local and restart the dev server.')
           }
 
           const questions = await generateQuestions(

@@ -1,9 +1,10 @@
 import { generateQuestions, type GenerateQuestionsInput } from '../server/gemini.ts'
 
+type GenerateBody = Partial<GenerateQuestionsInput>
+
 interface RequestLike {
   method?: string
-  body?: (Partial<GenerateQuestionsInput> & { apiKey?: string }) | null
-  headers?: Record<string, string | string[] | undefined>
+  body?: GenerateBody | null
 }
 
 interface ResponseLike {
@@ -11,27 +12,19 @@ interface ResponseLike {
   json: (body: unknown) => void
 }
 
-function headerValue(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value
-}
-
 export default async function handler(req: RequestLike, res: ResponseLike) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const body = req.body ?? {}
-  const apiKey =
-    process.env.GEMINI_API_KEY ??
-    headerValue(req.headers?.['x-gemini-api-key']) ??
-    body.apiKey
-
+  const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {
-    return res.status(400).json({
-      error: 'No Gemini API key configured. Add GEMINI_API_KEY in Vercel or paste a key in the generator.',
+    return res.status(500).json({
+      error: 'GEMINI_API_KEY is not configured on the server. Add it to your environment variables.',
     })
   }
 
+  const body = req.body ?? {}
   if (!body.programId || !body.subjectId || !body.topicId || !body.topicName) {
     return res.status(400).json({ error: 'Program, subject and topic are required.' })
   }

@@ -52,7 +52,7 @@ The app falls back to the bundled catalog if Supabase is unreachable, so it stil
 
 Open **Generator** in the sidebar. Pick a board, subject and scope (single topic, all topics in a subject, or all topics in the program), choose how many questions per topic, then generate. Each item includes four options, a marked correct answer and a written solution. Review the preview, discard weak items, and save the rest to the bank — they immediately become available in practice, mock exams and analytics.
 
-The browser calls BoardPrep's own `/api/generate-questions` route. The route uses `GEMINI_API_KEY` from the environment (recommended on Vercel); for local use you can instead paste a [Google AI Studio key](https://aistudio.google.com/apikey) into the generator, where it is kept in `localStorage`. The model used is `gemini-3.8-flash` with structured JSON output and low thinking for faster generation.
+The browser calls BoardPrep's own `/api/generate-questions` route. The key is **server-side only** — set `GEMINI_API_KEY` in `.env.local` for development or in Vercel for production; there is no key field in the UI and the key is never sent to the browser. The model used is `gemini-3.8-flash` with structured JSON output and low thinking for faster generation. If the variable is missing, the generator shows a configuration error instead of generating.
 
 ```env
 GEMINI_API_KEY=your-gemini-api-key

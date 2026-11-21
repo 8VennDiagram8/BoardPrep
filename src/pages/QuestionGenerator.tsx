@@ -3,7 +3,6 @@ import {
   ArrowRight,
   Check,
   Database,
-  KeyRound,
   LoaderCircle,
   Save,
   Sparkles,
@@ -15,7 +14,6 @@ import { Link } from 'react-router-dom'
 import { Badge, EmptyState, PageHeader } from '../components/ui'
 import { useApp } from '../context/AppContext'
 import { GEMINI_MODEL, requestGeneratedQuestions } from '../lib/gemini'
-import { readLocal, writeLocal } from '../lib/local'
 import type { Difficulty, ProgramId, Question, Topic } from '../lib/types'
 import { cn } from '../lib/utils'
 
@@ -26,12 +24,9 @@ interface Batch {
   questions: Question[]
 }
 
-const API_KEY_STORAGE = 'gemini-api-key'
-
 export function QuestionGenerator() {
   const { catalog, subjectsForProgram, topicsForSubject, addQuestions } = useApp()
 
-  const [apiKey, setApiKey] = useState(() => readLocal<string>(API_KEY_STORAGE, ''))
   const [programId, setProgramId] = useState<ProgramId>('ecele')
   const [subjectId, setSubjectId] = useState(() => subjectsForProgram('ecele')[0]?.id ?? '')
   const [topicId, setTopicId] = useState('')
@@ -76,16 +71,11 @@ export function QuestionGenerator() {
   }
 
   async function generate() {
-    if (!apiKey.trim()) {
-      setError('Paste a Gemini API key first, or set GEMINI_API_KEY in the environment.')
-      return
-    }
     if (targets.length === 0) {
       setError('Choose at least one topic to generate questions for.')
       return
     }
 
-    writeLocal(API_KEY_STORAGE, apiKey.trim())
     setBusy(true)
     setError(null)
     setSaved(false)
@@ -107,7 +97,7 @@ export function QuestionGenerator() {
           topicName: target.name,
           count: perTopic,
           difficulty,
-        }, apiKey.trim())
+        })
         if (questions.length > 0) results.push({ topic: target, questions })
       } catch (cause) {
         failures.push(`${target.name}: ${cause instanceof Error ? cause.message : 'failed'}`)
@@ -158,22 +148,12 @@ export function QuestionGenerator() {
         <aside className="card h-fit p-5">
           <h2 className="heading mb-4 text-base">Generation settings</h2>
 
-          <label className="mb-4 block">
-            <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-muted">
-              <KeyRound size={13} /> Gemini API key
+          <div className="mb-4 rounded-xl border border-line bg-surface-2 p-3 text-[0.7rem] leading-relaxed text-muted">
+            <span className="mb-1 flex items-center gap-1.5 font-semibold text-ink">
+              <Sparkles size={13} /> Server-configured
             </span>
-            <input
-              className="input"
-              type="password"
-              value={apiKey}
-              onChange={(event) => setApiKey(event.target.value)}
-              placeholder="AIza…"
-              autoComplete="off"
-            />
-            <span className="mt-1.5 block text-[0.7rem] leading-relaxed text-muted">
-              Stored only in this browser. You can also set <code>GEMINI_API_KEY</code> on the server.
-            </span>
-          </label>
+            Generation uses the server’s <code>GEMINI_API_KEY</code>. No key is stored in this browser.
+          </div>
 
           <label className="mb-4 block">
             <span className="mb-1.5 block text-xs font-semibold text-muted">Board / program</span>
