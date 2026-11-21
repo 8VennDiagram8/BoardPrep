@@ -388,7 +388,23 @@ function GeneratePanel() {
 /* PDF import                                                                 */
 /* -------------------------------------------------------------------------- */
 
-const MAX_PDF_BYTES = 3 * 1024 * 1024
+const MAX_PDF_BYTES = 20 * 1024 * 1024
+
+function normalisePrompt(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+async function retryOnDemand<T>(run: () => Promise<T>, attempt = 0): Promise<T> {
+  try {
+    return await run()
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : ''
+    const transient = /high demand|overloaded|resource exhausted|rate limit|too many requests|429|503|try again later/i.test(message)
+    if (attempt >= 2 || !transient) throw cause
+    await new Promise((resolve) => setTimeout(resolve, 2000 * (attempt + 1)))
+    return retryOnDemand(run, attempt + 1)
+  }
+}
 
 function PdfImportPanel() {
   const { catalog, subjectsForProgram, topicsForSubject, addQuestions } = useApp()
@@ -396,9 +412,11 @@ function PdfImportPanel() {
   const [subjectId, setSubjectId] = useState(() => subjectsForProgram('ecele')[0]?.id ?? '')
   const [topicId, setTopicId] = useState('')
   const [autoDetect, setAutoDetect] = useState(true)
+  const [pagesPerBatch, setPagesPerBatch] = useState(5)
   const [file, setFile] = useState<File | null>(null)
   const [questions, setQuestions] = useState<Question[]>([])
   const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
@@ -435,7 +453,7 @@ function PdfImportPanel() {
       return
     }
     if (selected.size > MAX_PDF_BYTES) {
-      setError('PDF is too large. Please use a file under 3 MB.')
+      setError('PDF is too large. Please use a file under 20 MB.')
       return
     }
     setFile(selected)
@@ -459,35 +477,64 @@ function PdfImportPanel() {
     setError(null)
     setSaved(false)
     setQuestions([])
+    setProgress('Reading PDF…')
+
+    const collected: Question[] = []
+    const seen = new Set(catalog.questions.map((item) => normalisePrompt(item.prompt)))
+    const failures: string[] = []
+
     try {
       const bytes = new Uint8Array(await file.arrayBuffer())
-      let binary = ''
-      for (const byte of bytes) binary += String.fromCharCode(byte)
-      const base64 = btoa(binary)
-      const found = await importQuestionsFromPdf({
-        programId,
-        subjectId,
-        topicId: autoDetect ? (candidates[0]?.id ?? topicId) : topicId,
-        programName: catalog.programs.find((item) => item.id === programId)?.name ?? programId,
-        subjectName: subjectId
-          ? catalog.subjects.find((item) => item.id === subjectId)?.name ?? subjectId
-          : 'Mixed subjects',
-        topicName: autoDetect
-          ? 'Detect per question'
-          : catalog.topics.find((item) => item.id === topicId)?.name ?? 'Topic',
-        count: 0,
-        difficulty: 'mixed',
-        fileName: file.name,
-        fileData: base64,
-        autoDetectTopic: autoDetect,
-        topics: candidates,
-      })
-      setQuestions(found)
-      if (found.length === 0) setError('No questions were found in this PDF.')
+      const { splitPdf, toBase64 } = await import('../lib/pdf')
+      const { chunks, pageCount } = await splitPdf(bytes, pagesPerBatch)
+
+      for (let index = 0; index < chunks.length; index += 1) {
+        const start = index * pagesPerBatch + 1
+        const end = Math.min(start + pagesPerBatch - 1, pageCount)
+        setProgress(`Extracting pages ${start}–${end} of ${pageCount} · ${collected.length} questions so far`)
+
+        try {
+          const found = await retryOnDemand(() => importQuestionsFromPdf({
+            programId,
+            subjectId,
+            topicId: autoDetect ? (candidates[0]?.id ?? topicId) : topicId,
+            programName: catalog.programs.find((item) => item.id === programId)?.name ?? programId,
+            subjectName: subjectId
+              ? catalog.subjects.find((item) => item.id === subjectId)?.name ?? subjectId
+              : 'Mixed subjects',
+            topicName: autoDetect
+              ? 'Detect per question'
+              : catalog.topics.find((item) => item.id === topicId)?.name ?? 'Topic',
+            count: 0,
+            difficulty: 'mixed',
+            fileName: `${file.name} (pages ${start}-${end})`,
+            fileData: toBase64(chunks[index]),
+            autoDetectTopic: autoDetect,
+            topics: candidates,
+          }))
+          for (const question of found) {
+            const key = normalisePrompt(question.prompt)
+            if (!key || seen.has(key)) continue
+            seen.add(key)
+            collected.push(question)
+          }
+          setQuestions([...collected])
+        } catch (cause) {
+          failures.push(`pages ${start}–${end}: ${cause instanceof Error ? cause.message : 'failed'}`)
+        }
+      }
+
+      setQuestions(collected)
+      if (collected.length === 0) {
+        setError('No questions were found in this PDF. Try a smaller pages-per-batch value.')
+      } else if (failures.length > 0) {
+        setError(`${failures.length} batch(es) failed. ${failures[0]}`)
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not read the PDF.')
     } finally {
       setBusy(false)
+      setProgress('')
     }
   }
 
@@ -577,7 +624,22 @@ function PdfImportPanel() {
             className="input !py-2 !text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
           />
           <span className="mt-1.5 block text-[0.7rem] leading-relaxed text-muted">
-            Maximum 3 MB. Questions and answers are extracted with Gemini 3.6 Flash.
+            Up to 20 MB. Large PDFs are processed in page batches with Gemini 3.6 Flash.
+          </span>
+        </label>
+        <label className="mb-4 block">
+          <span className="mb-1.5 block text-xs font-semibold text-muted">Pages per batch</span>
+          <select
+            className="input"
+            value={pagesPerBatch}
+            onChange={(event) => setPagesPerBatch(Number(event.target.value))}
+          >
+            {[2, 3, 5, 10].map((value) => (
+              <option key={value} value={value}>{value} pages</option>
+            ))}
+          </select>
+          <span className="mt-1.5 block text-[0.7rem] leading-relaxed text-muted">
+            Smaller batches extract more questions from dense PDFs, but take longer.
           </span>
         </label>
         {file && (
@@ -595,9 +657,14 @@ function PdfImportPanel() {
 
       <div>
         {error && <ErrorNote message={error} />}
+        {busy && progress && questions.length > 0 && (
+          <div className="mb-4 flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 p-3 text-xs font-semibold text-brand-700 dark:border-brand-800 dark:bg-brand-500/10 dark:text-brand-300">
+            <LoaderCircle size={14} className="animate-spin" /> {progress}
+          </div>
+        )}
         <SaveBar count={questions.length} busy={busy} saved={saved} onSave={() => void saveAll()} onDiscard={() => { setQuestions([]); setSaved(false) }} />
         {busy && questions.length === 0 ? (
-          <LoadingCard message="Reading your PDF and classifying each question…" />
+          <LoadingCard message={progress || 'Reading your PDF and classifying each question…'} />
         ) : questions.length === 0 && !saved ? (
           <EmptyState icon="📄" title="No questions extracted yet" description="Choose a PDF, then extract. Questions are grouped by the topic Gemini detects for each one." />
         ) : (

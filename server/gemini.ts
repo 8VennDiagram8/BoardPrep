@@ -125,6 +125,7 @@ function buildExtractPrompt(input: GenerateQuestionsInput, fileName: string): st
     '- Ignore headers, page numbers, instructions, tables of contents and answer-key lines that are not actual questions.',
     '- Keep the original wording as closely as possible; do not invent questions that are not in the document.',
     '- Set difficulty to easy, medium or hard based on the question.',
+    '- Return at most 100 questions from this portion of the PDF.',
     '',
     'Return ONLY a JSON object matching the provided response schema.',
   ].join('\n')
