@@ -148,13 +148,6 @@ export function QuestionGenerator() {
         <aside className="card h-fit p-5">
           <h2 className="heading mb-4 text-base">Generation settings</h2>
 
-          <div className="mb-4 rounded-xl border border-line bg-surface-2 p-3 text-[0.7rem] leading-relaxed text-muted">
-            <span className="mb-1 flex items-center gap-1.5 font-semibold text-ink">
-              <Sparkles size={13} /> Server-configured
-            </span>
-            Generation uses the server’s <code>GEMINI_API_KEY</code>. No key is stored in this browser.
-          </div>
-
           <label className="mb-4 block">
             <span className="mb-1.5 block text-xs font-semibold text-muted">Board / program</span>
             <select className="input" value={programId} onChange={(event) => changeProgram(event.target.value as ProgramId)}>
