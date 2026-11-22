@@ -142,13 +142,6 @@ export function Auth() {
             ))}
           </div>
 
-          {isDemoMode && (
-            <div className="mt-5 rounded-xl border border-brand-200 bg-brand-50 p-3 text-xs leading-relaxed text-brand-800 dark:border-brand-800 dark:bg-brand-500/10 dark:text-brand-200">
-              <strong>Demo mode.</strong> Supabase isn’t configured yet, so accounts are disabled —
-              continue as a guest and your progress will be saved in this browser.
-            </div>
-          )}
-
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             {mode === 'signup' && (
               <label className="block">
