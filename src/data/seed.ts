@@ -23,10 +23,10 @@ export const programs: Program[] = [
   {
     id: 'ectle',
     code: 'ECTLE',
-    name: 'Electronics Engineering Technician Licensure Examination',
-    shortName: 'Electronics Engineering Technician',
+    name: 'Electronics Technician Licensure Examination',
+    shortName: 'Electronics Technician',
     description:
-      'The PRC board exam for Electronics Engineering Technicians. Build hands-on mastery of devices, digital systems, troubleshooting and safety.',
+      'The PRC board exam for Electronics Technicians. Build hands-on mastery of devices, digital systems, troubleshooting and safety.',
     accent: 'cyan',
     glyph: '🔧',
   },

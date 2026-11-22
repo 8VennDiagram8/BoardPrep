@@ -2,7 +2,7 @@
 
 insert into public.programs (id, code, name, short_name, description, accent, glyph) values
   ('ecele', 'ECELE', 'Electronics Engineering Licensure Examination', 'Electronics Engineering', 'The PRC board exam for Electronics Engineers. Master circuits, devices, electromagnetics and communications.', 'indigo', '📡'),
-  ('ectle', 'ECTLE', 'Electronics Engineering Technician Licensure Examination', 'Electronics Engineering Technician', 'The PRC board exam for Electronics Engineering Technicians. Build hands-on mastery of devices, digital systems, troubleshooting and safety.', 'cyan', '🔧')
+  ('ectle', 'ECTLE', 'Electronics Technician Licensure Examination', 'Electronics Technician', 'The PRC board exam for Electronics Technicians. Build hands-on mastery of devices, digital systems, troubleshooting and safety.', 'cyan', '🔧')
 on conflict (id) do nothing;
 
 insert into public.subjects (id, program_id, name, code, description, glyph) values

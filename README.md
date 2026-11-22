@@ -5,7 +5,7 @@ An interactive board exam reviewer built with **Vite + React + TypeScript + Tail
 Currently bundled programs:
 
 - **ECELE** — Electronics Engineering Licensure Examination
-- **ECTLE** — Electronics Engineering Technician Licensure Examination
+- **ECTLE** — Electronics Technician Licensure Examination
 
 The catalog is data-driven, so more programs, subjects and topics can be added later.
 
