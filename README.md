@@ -34,7 +34,7 @@ Open http://localhost:5173. With no environment variables the app runs in **demo
 
 1. Create a Supabase project.
 2. Run [`supabase/migrations/001_init.sql`](supabase/migrations/001_init.sql) in the SQL editor.
-3. Run [`supabase/migrations/002_generated_questions.sql`](supabase/migrations/002_generated_questions.sql) (adds generated-question columns and insert policy), then [`003_manual_question_source.sql`](supabase/migrations/003_manual_question_source.sql) (allows manually typed questions).
+3. Run migrations `002_generated_questions.sql`, `003_manual_question_source.sql` and `004_question_ownership.sql` in order (generated/manual question columns, insert policy, and per-account ownership).
 4. Run [`supabase/seed.sql`](supabase/seed.sql) to load the starter question bank.
 5. Copy `.env.example` to `.env.local` and fill in your project URL and anon key.
 6. Restart the dev server.
@@ -47,6 +47,10 @@ VITE_SUPABASE_ANON_KEY=your-anon-public-key
 The app falls back to the bundled catalog if Supabase is unreachable, so it still works offline.
 
 > Change the content in `src/data/seed.ts`, then run `npm run seed:generate` to regenerate `supabase/seed.sql`.
+
+### Per-account data
+
+Every signed-in account has its own data. localStorage keys are suffixed with the account id (`boardprep:settings:<id>`, `boardprep:attempts:<id>`, `boardprep:known:<id>`, `boardprep:custom-questions:<id>`), and guests get their own generated guest id. In Supabase, `attempts` and user-added `questions` have a `user_id` and RLS policies that expose only the owner's rows. The bundled seed catalog is shared and read-only. Switching accounts on the same browser therefore never mixes progress, preferences, flashcard marks or generated questions.
 
 ## Question bank tools
 

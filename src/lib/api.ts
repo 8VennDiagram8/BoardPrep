@@ -1,5 +1,5 @@
 import { seedCatalog } from '../data/seed'
-import { readLocal, writeLocal } from './local'
+import { readLocal, removeLocal, writeLocal } from './local'
 import { supabase } from './supabase'
 import type {
   Attempt,
@@ -61,6 +61,7 @@ function mapQuestion(row: DbRow): Question {
     difficulty: row.difficulty === 'easy' || row.difficulty === 'hard' ? row.difficulty : 'medium',
     source: row.source === 'generated' || row.source === 'manual' ? row.source : 'seed',
     generatedAt: row.generated_at ?? undefined,
+    userId: row.user_id ?? undefined,
   }
 }
 
@@ -75,19 +76,30 @@ function mapFlashcard(row: DbRow): Flashcard {
   }
 }
 
-const CUSTOM_QUESTIONS_KEY = 'custom-questions'
+function customQuestionsKey(userId: string): string {
+  return `custom-questions:${userId}`
+}
 
 /* -------------------------------------------------------------------------- */
 /* Catalog                                                                    */
 /* -------------------------------------------------------------------------- */
 
-/** Questions generated in the browser and not (yet) synced to Supabase. */
-export function getLocalQuestions(): Question[] {
-  return readLocal<Question[]>(CUSTOM_QUESTIONS_KEY, [])
+/** Questions generated/typed by one account and kept in that browser. */
+export function getLocalQuestions(userId: string): Question[] {
+  const scoped = readLocal<Question[] | null>(customQuestionsKey(userId), null)
+  if (scoped) return scoped
+  // One-time migration from the old account-agnostic key.
+  const legacy = readLocal<Question[] | null>('custom-questions', null)
+  if (legacy?.length) {
+    writeLocal(customQuestionsKey(userId), legacy)
+    removeLocal('custom-questions')
+    return legacy
+  }
+  return []
 }
 
-function withLocalQuestions(catalog: Catalog): Catalog {
-  const custom = getLocalQuestions()
+function withLocalQuestions(catalog: Catalog, userId: string): Catalog {
+  const custom = getLocalQuestions(userId)
   if (custom.length === 0) return catalog
   const ids = new Set(catalog.questions.map((question) => question.id))
   return {
@@ -101,8 +113,8 @@ function withLocalQuestions(catalog: Catalog): Catalog {
  * Supabase is preferred when configured; any failure falls back to the bundled
  * demo catalog so the reviewer is always usable — including offline.
  */
-export async function getCatalog(): Promise<Catalog> {
-  if (!supabase) return withLocalQuestions(seedCatalog)
+export async function getCatalog(userId: string): Promise<Catalog> {
+  if (!supabase) return withLocalQuestions(seedCatalog, userId)
 
   try {
     const [programs, subjects, topics, questions, flashcards] = await Promise.all([
@@ -115,7 +127,7 @@ export async function getCatalog(): Promise<Catalog> {
 
     const results = [programs, subjects, topics, questions, flashcards]
     if (results.some((result) => result.error) || !programs.data?.length) {
-      return withLocalQuestions(seedCatalog)
+      return withLocalQuestions(seedCatalog, userId)
     }
 
     return withLocalQuestions({
@@ -124,20 +136,20 @@ export async function getCatalog(): Promise<Catalog> {
       topics: (topics.data ?? []).map(mapTopic),
       questions: (questions.data ?? []).map(mapQuestion),
       flashcards: (flashcards.data ?? []).map(mapFlashcard),
-    })
+    }, userId)
   } catch {
-    return withLocalQuestions(seedCatalog)
+    return withLocalQuestions(seedCatalog, userId)
   }
 }
 
-/** Persists generated questions locally and, when available, to Supabase. */
-export async function addQuestions(questions: Question[]): Promise<void> {
+/** Persists one account's questions locally and, when available, to Supabase. */
+export async function addQuestions(questions: Question[], userId: string): Promise<void> {
   if (questions.length === 0) return
 
-  const existing = getLocalQuestions()
+  const existing = getLocalQuestions(userId)
   const ids = new Set(existing.map((question) => question.id))
   writeLocal(
-    CUSTOM_QUESTIONS_KEY,
+    customQuestionsKey(userId),
     [...existing, ...questions.filter((question) => !ids.has(question.id))].slice(0, 2000),
   )
 
@@ -156,6 +168,7 @@ export async function addQuestions(questions: Question[]): Promise<void> {
         difficulty: question.difficulty,
         source: question.source ?? 'generated',
         generated_at: question.generatedAt ?? null,
+        user_id: userId,
       })),
     )
   } catch {

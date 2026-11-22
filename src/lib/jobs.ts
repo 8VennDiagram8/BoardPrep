@@ -125,6 +125,7 @@ export interface GenerateJobInput {
   targets: GenerateTarget[]
   perTopic: number
   difficulty: 'mixed' | Difficulty
+  userId: string
 }
 
 let generateController: AbortController | null = null
@@ -134,7 +135,7 @@ export function startGenerateJob(input: GenerateJobInput): void {
 
   // Don't lose an unsaved preview if the user starts another run.
   if (state.generate.batches.length > 0 && !state.generate.saved) {
-    void addQuestions(state.generate.batches.flatMap((batch) => batch.questions))
+    void addQuestions(state.generate.batches.flatMap((batch) => batch.questions), input.userId)
   }
 
   const controller = new AbortController()
@@ -207,11 +208,11 @@ export function resetGenerateJob(): void {
   patchGenerate({ ...initialGenerate })
 }
 
-export async function saveGenerateJob(): Promise<void> {
+export async function saveGenerateJob(userId: string): Promise<void> {
   const questions = state.generate.batches.flatMap((batch) => batch.questions)
   if (questions.length === 0) return
   patchGenerate({ saving: true })
-  await addQuestions(questions)
+  await addQuestions(questions, userId)
   patchGenerate({ saving: false, saved: true, batches: [] })
 }
 
@@ -227,6 +228,7 @@ export interface PdfJobInput {
   topicName: string
   candidates: TopicCandidate[]
   existingPrompts: string[]
+  userId: string
 }
 
 let pdfController: AbortController | null = null
@@ -286,7 +288,7 @@ export function startPdfJob(input: PdfJobInput): void {
             collected.push(question)
           }
           if (fresh.length > 0) {
-            await addQuestions(fresh)
+            await addQuestions(fresh, input.userId)
             patchPdf({ savedCount: collected.length, questions: [...collected] })
           }
         } catch (cause) {

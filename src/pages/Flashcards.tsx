@@ -24,9 +24,14 @@ export function Flashcards() {
   const [order, setOrder] = useState<string[]>([])
   const [index, setIndex] = useState(0)
   const [flipped, setFlipped] = useState(false)
+  const ownerId = user?.id ?? 'anonymous'
   const [known, setKnown] = useState<string[]>(() =>
-    readLocal<string[]>(`known:${user?.id ?? 'guest'}`, []),
+    readLocal<string[]>(`known:${ownerId}`, []),
   )
+
+  useEffect(() => {
+    setKnown(readLocal<string[]>(`known:${ownerId}`, []))
+  }, [ownerId])
 
   useEffect(() => {
     if (paramProgram && catalog.programs.some((item) => item.id === paramProgram)) {
@@ -65,9 +70,9 @@ export function Flashcards() {
   const persistKnown = useCallback(
     (next: string[]) => {
       setKnown(next)
-      writeLocal(`known:${user?.id ?? 'guest'}`, next)
+      writeLocal(`known:${ownerId}`, next)
     },
-    [user?.id],
+    [ownerId],
   )
 
   function mark(knownIt: boolean) {

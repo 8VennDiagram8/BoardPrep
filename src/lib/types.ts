@@ -46,6 +46,8 @@ export interface Question {
   /** Bundled, AI-generated or manually typed question. */
   source?: 'seed' | 'generated' | 'manual'
   generatedAt?: string
+  /** Owner of a user-added question; seed questions have no owner. */
+  userId?: string
 }
 
 export interface Flashcard {

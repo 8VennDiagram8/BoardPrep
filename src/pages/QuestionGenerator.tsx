@@ -16,6 +16,7 @@ import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge, EmptyState, PageHeader } from '../components/ui'
 import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 import { GEMINI_MODEL, type TopicCandidate } from '../lib/gemini'
 import {
   cancelGenerateJob,
@@ -230,6 +231,7 @@ function LoadingCard({ message }: { message: string }) {
 
 function GeneratePanel() {
   const { catalog, subjectsForProgram, topicsForSubject } = useApp()
+  const { user } = useAuth()
   const { generate } = useJobs()
   const [programId, setProgramId] = useState<ProgramId>('ecele')
   const [subjectId, setSubjectId] = useState(() => subjectsForProgram('ecele')[0]?.id ?? '')
@@ -323,7 +325,7 @@ function GeneratePanel() {
               return
             }
             setLocalError(null)
-            startGenerateJob({ targets, perTopic, difficulty })
+            startGenerateJob({ targets, perTopic, difficulty, userId: user?.id ?? 'anonymous' })
           }}
         >
           {generate.running ? <LoaderCircle size={17} className="animate-spin" /> : <WandSparkles size={17} />}
@@ -353,7 +355,7 @@ function GeneratePanel() {
           count={total}
           busy={generate.saving}
           saved={generate.saved}
-          onSave={() => void saveGenerateJob()}
+          onSave={() => void saveGenerateJob(user?.id ?? 'anonymous')}
           onDiscard={resetGenerateJob}
         />
         {generate.running && generate.batches.length === 0 ? (
@@ -395,6 +397,7 @@ const MAX_PDF_BYTES = 20 * 1024 * 1024
 
 function PdfImportPanel() {
   const { catalog, subjectsForProgram, topicsForSubject } = useApp()
+  const { user } = useAuth()
   const { pdf } = useJobs()
   const [programId, setProgramId] = useState<ProgramId>('ecele')
   const [subjectId, setSubjectId] = useState(() => subjectsForProgram('ecele')[0]?.id ?? '')
@@ -477,6 +480,7 @@ function PdfImportPanel() {
         : catalog.topics.find((item) => item.id === topicId)?.name ?? 'Topic',
       candidates,
       existingPrompts: catalog.questions.map((item) => item.prompt),
+      userId: user?.id ?? 'anonymous',
     })
   }
 

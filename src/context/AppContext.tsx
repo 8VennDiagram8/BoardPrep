@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { seedCatalog } from '../data/seed'
 import { addQuestions, clearAttempts, getAttempts, getCatalog, saveAttempt } from '../lib/api'
-import { readLocal, writeLocal } from '../lib/local'
+import { readLocal, removeLocal, writeLocal } from '../lib/local'
 import { DEFAULT_SETTINGS } from '../lib/types'
 import type {
   Attempt,
@@ -25,7 +25,21 @@ import type {
 import { percent } from '../lib/utils'
 import { useAuth } from './AuthContext'
 
-const SETTINGS_KEY = 'settings'
+function settingsKey(userId: string): string {
+  return `settings:${userId}`
+}
+
+function loadSettings(userId: string): StudySettings {
+  const scoped = readLocal<StudySettings | null>(settingsKey(userId), null)
+  if (scoped) return scoped
+  const legacy = readLocal<StudySettings | null>('settings', null)
+  if (legacy) {
+    writeLocal(settingsKey(userId), legacy)
+    removeLocal('settings')
+    return legacy
+  }
+  return DEFAULT_SETTINGS
+}
 
 export interface TopicMastery {
   answered: number
@@ -71,29 +85,42 @@ const AppContext = createContext<AppContextValue | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
+  const userId = user?.id ?? 'anonymous'
   const [catalog, setCatalog] = useState<Catalog>(seedCatalog)
   const [attempts, setAttempts] = useState<Attempt[]>([])
   const [loadingAttempts, setLoadingAttempts] = useState(false)
-  const [settings, setSettings] = useState<StudySettings>(() =>
-    readLocal<StudySettings>(SETTINGS_KEY, DEFAULT_SETTINGS),
-  )
+  const [settings, setSettings] = useState<StudySettings>(() => loadSettings(userId))
+  const [settingsOwner, setSettingsOwner] = useState<string | null>(null)
 
   useEffect(() => {
-    void getCatalog().then((next) => setCatalog(next))
-  }, [])
+    let active = true
+    void getCatalog(userId).then((next) => {
+      if (active) setCatalog(next)
+    })
+    return () => {
+      active = false
+    }
+  }, [userId])
+
+  // Preferences are stored per account, not shared across the browser.
+  useEffect(() => {
+    setSettings(loadSettings(userId))
+    setSettingsOwner(userId)
+  }, [userId])
 
   useEffect(() => {
-    writeLocal(SETTINGS_KEY, settings)
+    if (settingsOwner !== userId) return
+    writeLocal(settingsKey(userId), settings)
     document.documentElement.classList.toggle('dark', settings.theme === 'dark')
-  }, [settings])
+  }, [settings, settingsOwner, userId])
 
-  const userId = user?.id
   useEffect(() => {
-    if (!userId) {
+    if (userId === 'anonymous') {
       setAttempts([])
       return
     }
     let active = true
+    setAttempts([])
     setLoadingAttempts(true)
     void getAttempts(userId).then((items) => {
       if (!active) return
@@ -111,26 +138,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const recordAttempt = useCallback(
     async (attempt: Attempt) => {
-      const complete: Attempt = { ...attempt, userId: user?.id ?? 'guest' }
+      const complete: Attempt = { ...attempt, userId }
       setAttempts((current) => [complete, ...current])
       await saveAttempt(complete)
     },
-    [user?.id],
+    [userId],
   )
 
   const clearProgress = useCallback(async () => {
-    if (!user) return
-    await clearAttempts(user.id)
+    if (userId === 'anonymous') return
+    await clearAttempts(userId)
     setAttempts([])
-  }, [user])
+  }, [userId])
 
   const refreshCatalog = useCallback(async () => {
-    setCatalog(await getCatalog())
-  }, [])
+    setCatalog(await getCatalog(userId))
+  }, [userId])
 
   const addGeneratedQuestions = useCallback(
     async (questions: Question[]) => {
-      await addQuestions(questions)
+      await addQuestions(questions, userId)
       setCatalog((current) => {
         const ids = new Set(current.questions.map((question) => question.id))
         return {
@@ -139,7 +166,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       })
     },
-    [],
+    [userId],
   )
 
   const value = useMemo<AppContextValue>(() => {
