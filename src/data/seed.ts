@@ -68,52 +68,12 @@ export const subjects: Subject[] = [
   },
   // ---------------------------------------------------------------- ECTLE
   {
-    id: 'ectle-basics',
+    id: 'ectle-technical',
     programId: 'ectle',
-    name: 'Basic Electronics',
-    code: 'BASICS',
-    description: 'Components, symbols, diodes and transistors.',
+    name: 'Technical Subjects and Laws and Ethics',
+    code: 'TECH',
+    description: 'Mathematics, circuits, equipment, codes and the Electronics Engineering Law.',
     glyph: '🧰',
-  },
-  {
-    id: 'ectle-digital',
-    programId: 'ectle',
-    name: 'Digital Electronics',
-    code: 'DIGITAL',
-    description: 'Logic gates, Boolean algebra and number systems.',
-    glyph: '🔢',
-  },
-  {
-    id: 'ectle-electrical',
-    programId: 'ectle',
-    name: 'Electrical Circuits & Measurements',
-    code: 'ELEC',
-    description: 'DC/AC circuits, meters and electrical power.',
-    glyph: '🔋',
-  },
-  {
-    id: 'ectle-comm',
-    programId: 'ectle',
-    name: 'Communications Systems',
-    code: 'COMM',
-    description: 'Radio, modulation and basic data networks.',
-    glyph: '📻',
-  },
-  {
-    id: 'ectle-industrial',
-    programId: 'ectle',
-    name: 'Industrial Electronics',
-    code: 'INDUSTRIAL',
-    description: 'Motors, relays, PLCs, safety and troubleshooting.',
-    glyph: '🏭',
-  },
-  {
-    id: 'ectle-practical',
-    programId: 'ectle',
-    name: 'Practical Applications',
-    code: 'PRACTICAL',
-    description: 'Soldering, assembly and test instruments.',
-    glyph: '🛠️',
   },
 ]
 
@@ -160,18 +120,15 @@ const topicSeeds: TopicSeed[] = [
   ['ecele-geas-law', 'ecele-geas', 'ecele', 'ECE Laws, Contracts, Ethics, Standards & Safety', 'PRC laws, codes of ethics and workplace safety'],
   ['ecele-geas-cad', 'ecele-geas', 'ecele', 'CAD', 'Drafting standards, schematics and manufacturing files'],
   // ECTLE
-  ['ectle-basics-components', 'ectle-basics', 'ectle', 'Components & Symbols', 'Resistors, capacitors and inductors'],
-  ['ectle-basics-semi', 'ectle-basics', 'ectle', 'Diodes & Transistors', 'PN junction, Zener and BJT operation'],
-  ['ectle-dig-logic', 'ectle-digital', 'ectle', 'Logic Gates & Boolean Algebra', 'AND, OR, NOT and De Morgan’s theorem'],
-  ['ectle-dig-systems', 'ectle-digital', 'ectle', 'Number Systems & Memory', 'Binary, hex and basic memory devices'],
-  ['ectle-elec-dc', 'ectle-electrical', 'ectle', 'DC Circuits & Measurements', 'Series/parallel circuits and meters'],
-  ['ectle-elec-ac', 'ectle-electrical', 'ectle', 'AC Circuits & Power', 'Mains power, RMS and power factor'],
-  ['ectle-comm-radio', 'ectle-comm', 'ectle', 'Radio & Modulation', 'Carrier, AM/FM and antenna basics'],
-  ['ectle-comm-data', 'ectle-comm', 'ectle', 'Data & Networks', 'Cabling, connectors and OSI layers'],
-  ['ectle-ind-control', 'ectle-industrial', 'ectle', 'Control Systems & Motors', 'Relays, contactors, motors and PLCs'],
-  ['ectle-ind-safety', 'ectle-industrial', 'ectle', 'Safety & Troubleshooting', 'Grounding, fuses and fault finding'],
-  ['ectle-prac-soldering', 'ectle-practical', 'ectle', 'Soldering & Assembly', 'Solder joints, tools and component orientation'],
-  ['ectle-prac-instruments', 'ectle-practical', 'ectle', 'Test Instruments', 'Multimeters, scopes and signal generators'],
+  ['ectle-math-basic', 'ectle-technical', 'ectle', 'Basic Mathematics', 'Arithmetic, algebra and applied calculations'],
+  ['ectle-ohm-law', 'ectle-technical', 'ectle', "Ohm's Law", 'Voltage, current, resistance and power'],
+  ['ectle-machines', 'ectle-technical', 'ectle', 'Electronic/Electrical Machine or Equipment', 'Motors, generators, transformers and appliances'],
+  ['ectle-test-equipment', 'ectle-technical', 'ectle', 'Test Equipment', 'Multimeters, oscilloscopes and signal generators'],
+  ['ectle-components', 'ectle-technical', 'ectle', 'Electronic/Electrical Component', 'Resistors, capacitors, diodes and transistors'],
+  ['ectle-maintenance', 'ectle-technical', 'ectle', 'Maintenance and Repair', 'Troubleshooting, soldering and preventive maintenance'],
+  ['ectle-pec-electronics', 'ectle-technical', 'ectle', 'Philippine Electronics Code volume 1 and volume 2', 'Electronics code provisions and safety standards'],
+  ['ectle-pec-electrical', 'ectle-technical', 'ectle', 'Philippine Electrical Code', 'Wiring, grounding and overcurrent protection'],
+  ['ectle-ra9292', 'ectle-technical', 'ectle', 'Republic act 9292 Electronics Engineering Law of 2004', 'The Electronics Engineering Law, PRC regulation and ethics'],
 ]
 
 export const topics: Topic[] = topicSeeds.map(([id, subjectId, programId, name, description]) => ({
@@ -362,65 +319,49 @@ export const questions: Question[] = [
   ]),
 
   // ---------------------------------------------------------------- ECTLE
-  ...questionGroup('ectle', 'ectle-basics', 'ectle-basics-components', [
-    ['A resistor with colour bands brown–black–red has a resistance of:', ['100 Ω', '1 kΩ', '10 kΩ', '100 kΩ'], 1, 'Brown = 1, black = 0, red = ×100, giving 10 × 100 = 1,000 Ω = 1 kΩ.', 'medium'],
-    ['Which component stores energy in an electric field?', ['Resistor', 'Capacitor', 'Inductor', 'Diode'], 1, 'A capacitor stores energy in the electric field between its plates.', 'easy'],
-    ['Which component opposes changes in current flow?', ['Capacitor', 'Inductor', 'Resistor', 'LED'], 1, 'An inductor resists changes in current by inducing a opposing voltage.', 'medium'],
-  ]),
-  ...questionGroup('ectle', 'ectle-basics', 'ectle-basics-semi', [
-    ['A PN junction diode conducts when it is:', ['forward biased', 'reverse biased', 'unbiased', 'at breakdown always'], 0, 'Forward bias lowers the barrier potential and allows current to flow.', 'easy'],
-    ['In an NPN transistor, the arrow on the emitter points:', ['toward the base', 'outward, away from the base', 'inward, toward the base', 'there is no arrow'], 1, 'The NPN arrow points outward — “Not Pointing iN”.', 'medium'],
-    ['A Zener diode is primarily used for:', ['amplification', 'voltage regulation', 'rectification only', 'light emission'], 1, 'Zener diodes operate in reverse breakdown to maintain a reference voltage.', 'medium'],
-  ]),
-  ...questionGroup('ectle', 'ectle-digital', 'ectle-dig-logic', [
-    ['The output of an OR gate is HIGH when:', ['all inputs are LOW', 'at least one input is HIGH', 'inputs are different', 'all inputs are HIGH only'], 1, 'An OR gate outputs HIGH if any input is HIGH.', 'easy'],
-    ['An XOR gate outputs 1 when:', ['both inputs are 0', 'both inputs are 1', 'the inputs are different', 'either input is 1'], 2, 'XOR (exclusive OR) is true only when the inputs differ.', 'easy'],
-    ['De Morgan’s theorem states that (A·B)′ equals:', ['A′·B′', 'A′ + B′', 'A + B', 'A·B'], 1, 'De Morgan: the complement of a product equals the sum of the complements.', 'medium'],
-  ]),
-  ...questionGroup('ectle', 'ectle-digital', 'ectle-dig-systems', [
+  ...questionGroup('ectle', 'ectle-technical', 'ectle-math-basic', [
     ['The binary number 1010 is equal to the decimal value:', ['8', '9', '10', '12'], 2, '1010₂ = 8 + 0 + 2 + 0 = 10.', 'easy'],
     ['The hexadecimal digit F represents the decimal value:', ['10', '14', '15', '16'], 2, 'Hex digits run 0–9 then A=10 through F=15.', 'easy'],
-    ['One byte consists of:', ['4 bits', '8 bits', '16 bits', '32 bits'], 1, 'A byte is 8 bits and can represent 256 distinct values.', 'easy'],
+    ['What is 15% of 200?', ['15', '20', '30', '35'], 2, '0.15 × 200 = 30.', 'easy'],
   ]),
-  ...questionGroup('ectle', 'ectle-electrical', 'ectle-elec-dc', [
+  ...questionGroup('ectle', 'ectle-technical', 'ectle-ohm-law', [
+    ['A 12 V source is connected to a 4 Ω resistor. What is the current?', ['2 A', '3 A', '4 A', '48 A'], 1, 'By Ohm’s law, I = V / R = 12 / 4 = 3 A.', 'easy'],
+    ['The power dissipated by a 2 Ω resistor carrying 3 A is:', ['6 W', '12 W', '18 W', '36 W'], 2, 'P = I²R = 3² × 2 = 18 W.', 'medium'],
+    ['Two resistors of 4 Ω and 6 Ω in series have an equivalent resistance of:', ['2.4 Ω', '10 Ω', '5 Ω', '24 Ω'], 1, 'Series resistances add directly: 4 + 6 = 10 Ω.', 'easy'],
+  ]),
+  ...questionGroup('ectle', 'ectle-technical', 'ectle-machines', [
+    ['A transformer is used to:', ['change AC voltage level', 'convert AC to DC', 'store electrical energy', 'amplify current only'], 0, 'A transformer changes AC voltage via electromagnetic induction.', 'easy'],
+    ['The synchronous speed of an induction motor depends on:', ['supply frequency and number of poles', 'load torque only', 'armature resistance', 'ambient temperature'], 0, 'Ns = 120f / P, so speed depends on frequency and pole count.', 'medium'],
+    ['A generator primarily converts:', ['mechanical energy to electrical energy', 'electrical energy to heat only', 'DC to AC only', 'sound to light'], 0, 'Generators convert mechanical rotation into electrical energy.', 'easy'],
+  ]),
+  ...questionGroup('ectle', 'ectle-technical', 'ectle-test-equipment', [
     ['An ammeter must be connected:', ['in parallel with the load', 'in series with the load', 'across the supply only', 'to ground only'], 1, 'An ammeter measures current and must be placed in series so the same current flows through it.', 'easy'],
     ['A good voltmeter has:', ['very low internal resistance', 'very high internal resistance', 'zero internal resistance', 'no internal resistance'], 1, 'High internal resistance minimises the current drawn from the circuit under test.', 'medium'],
-    ['The power dissipated in a resistor can be computed as:', ['P = V × I', 'P = I²R', 'P = V²/R', 'All of the above'], 3, 'All three expressions are equivalent via Ohm’s law.', 'easy'],
+    ['An oscilloscope primarily displays:', ['current versus temperature', 'voltage versus time', 'resistance versus frequency', 'power versus time'], 1, 'An oscilloscope plots instantaneous voltage against time.', 'easy'],
   ]),
-  ...questionGroup('ectle', 'ectle-electrical', 'ectle-elec-ac', [
-    ['The standard mains frequency in the Philippines is:', ['50 Hz', '60 Hz', '100 Hz', '400 Hz'], 1, 'Philippine mains power is nominally 220 V at 60 Hz.', 'easy'],
-    ['The RMS value of a 220 V AC mains rating refers to:', ['peak voltage', 'average voltage', 'effective voltage', 'peak-to-peak voltage'], 2, 'AC voltage ratings are normally RMS (effective) values.', 'medium'],
-    ['Power factor is defined as:', ['the ratio of real to apparent power', 'the ratio of apparent to real power', 'the sine of the phase angle', 'the supply frequency'], 0, 'PF = cos φ = real power / apparent power.', 'medium'],
+  ...questionGroup('ectle', 'ectle-technical', 'ectle-components', [
+    ['A resistor with colour bands brown–black–red has a resistance of:', ['100 Ω', '1 kΩ', '10 kΩ', '100 kΩ'], 1, 'Brown = 1, black = 0, red = ×100, giving 10 × 100 = 1,000 Ω = 1 kΩ.', 'medium'],
+    ['Which component stores energy in an electric field?', ['Resistor', 'Capacitor', 'Inductor', 'Diode'], 1, 'A capacitor stores energy in the electric field between its plates.', 'easy'],
+    ['A PN junction diode conducts when it is:', ['forward biased', 'reverse biased', 'unbiased', 'at breakdown always'], 0, 'Forward bias lowers the barrier potential and allows current to flow.', 'easy'],
   ]),
-  ...questionGroup('ectle', 'ectle-comm', 'ectle-comm-radio', [
-    ['Modulation is the process of:', ['amplifying a carrier', 'varying a carrier with an information signal', 'filtering noise only', 'converting AC to DC'], 1, 'Modulation impresses information onto a high-frequency carrier for transmission.', 'easy'],
-    ['The standard AM broadcast band extends approximately from:', ['530 to 1700 kHz', '88 to 108 MHz', '3 to 30 MHz', '1 to 2 GHz'], 0, 'The AM broadcast band is roughly 530–1700 kHz (medium wave).', 'medium'],
-    ['A quarter-wave antenna at 100 MHz is approximately:', ['0.075 m', '0.75 m', '3 m', '7.5 m'], 1, 'λ = 3 m at 100 MHz, so λ/4 = 0.75 m.', 'medium'],
-  ]),
-  ...questionGroup('ectle', 'ectle-comm', 'ectle-comm-data', [
-    ['The connector most commonly used for twisted-pair Ethernet is:', ['RJ11', 'RJ45', 'BNC', 'USB-C'], 1, 'Ethernet over twisted pair uses an 8-position RJ45 connector.', 'easy'],
-    ['A network hub operates at which OSI layer?', ['Physical', 'Data Link', 'Network', 'Transport'], 0, 'A hub simply repeats electrical signals and works at the physical layer.', 'medium'],
-    ['Category 5e cable supports data rates up to:', ['10 Mbps', '100 Mbps', '1 Gbps', '10 Gbps'], 2, 'Cat5e is specified for Gigabit Ethernet (1000BASE-T) up to 100 m.', 'medium'],
-  ]),
-  ...questionGroup('ectle', 'ectle-industrial', 'ectle-ind-control', [
-    ['A relay is best described as:', ['a solid-state amplifier', 'an electrically operated switch', 'a voltage regulator', 'a current source'], 1, 'A relay uses an electromagnet to open or close contacts, isolating control from load.', 'easy'],
-    ['The synchronous speed of an induction motor depends on:', ['supply frequency and number of poles', 'load torque only', 'armature resistance', 'ambient temperature'], 0, 'Ns = 120f / P, so speed depends on frequency and pole count.', 'medium'],
-    ['PLC stands for:', ['Programmable Logic Controller', 'Power Line Conduit', 'Personal Logic Circuit', 'Programmed Load Control'], 0, 'A PLC is a ruggedised digital computer used for industrial automation.', 'easy'],
-  ]),
-  ...questionGroup('ectle', 'ectle-industrial', 'ectle-ind-safety', [
+  ...questionGroup('ectle', 'ectle-technical', 'ectle-maintenance', [
     ['Before servicing electrical equipment, you should first:', ['remove the fuse only', 'disconnect and lock out the power supply', 'wear thin gloves', 'increase the load'], 1, 'Lockout/tagout and de-energising the circuit is the essential first safety step.', 'easy'],
     ['A fuse primarily protects a circuit against:', ['overvoltage', 'overcurrent', 'low frequency', 'reverse polarity'], 1, 'A fuse opens the circuit when current exceeds its rated value.', 'easy'],
-    ['Equipping metal enclosures with a safety ground helps prevent:', ['electric shock', 'voltage sag', 'radio interference', 'power factor penalty'], 0, 'Grounding provides a low-resistance fault path so protective devices trip quickly.', 'medium'],
-  ]),
-  ...questionGroup('ectle', 'ectle-practical', 'ectle-prac-soldering', [
-    ['Traditional solder is an alloy mainly of:', ['copper and zinc', 'tin and lead', 'silver and gold', 'aluminium and iron'], 1, 'Conventional solder is a tin-lead alloy; lead-free variants use tin with silver/copper.', 'easy'],
     ['Before use, the tip of a soldering iron should be:', ['painted', 'tinned', 'sandblasted', 'oiled'], 1, 'Tinning the tip with solder improves heat transfer and prevents oxidation.', 'medium'],
-    ['On an IC package, the notch or dot identifies:', ['pin 1', 'the last pin', 'ground only', 'the negative supply'], 0, 'The notch/dot marks pin 1 and the pins are then counted counter-clockwise.', 'medium'],
   ]),
-  ...questionGroup('ectle', 'ectle-practical', 'ectle-prac-instruments', [
-    ['An oscilloscope primarily displays:', ['current versus temperature', 'voltage versus time', 'resistance versus frequency', 'power versus time'], 1, 'An oscilloscope plots instantaneous voltage on the vertical axis against time horizontally.', 'easy'],
-    ['A digital multimeter can typically measure:', ['voltage, current and resistance', 'only voltage', 'only current', 'frequency only'], 0, 'The common DMM measures volts, amps and ohms, often with extra functions.', 'easy'],
-    ['A function generator is used to produce:', ['DC power only', 'test waveforms such as sine and square', 'high-voltage transmission', 'mechanical rotation'], 1, 'Function generators create repeatable test signals at adjustable frequency and amplitude.', 'easy'],
+  ...questionGroup('ectle', 'ectle-technical', 'ectle-pec-electronics', [
+    ['Grounding the shield of a signal cable primarily helps reduce:', ['electromagnetic interference', 'power consumption', 'cable capacitance', 'signal amplitude'], 0, 'A grounded shield drains induced noise and reduces EMI pickup.', 'medium'],
+    ['Equipment enclosures are grounded mainly to protect against:', ['electric shock', 'voltage sag', 'radio interference', 'power factor penalty'], 0, 'Grounding gives fault current a low-resistance path so protective devices trip quickly.', 'medium'],
+  ]),
+  ...questionGroup('ectle', 'ectle-technical', 'ectle-pec-electrical', [
+    ['The standard mains supply in the Philippines is approximately:', ['110 V, 50 Hz', '220 V, 60 Hz', '230 V, 50 Hz', '480 V, 60 Hz'], 1, 'Philippine mains power is nominally 220 V at 60 Hz.', 'easy'],
+    ['Branch circuit conductors must be protected by:', ['an overcurrent protective device', 'a short length of wire', 'an open switch', 'a larger fuse than the load'], 0, 'Codes require overcurrent protection rated for the conductor ampacity.', 'medium'],
+    ['A ground-fault circuit interrupter (GFCI) is designed to protect against:', ['electric shock from ground faults', 'overvoltage only', 'power factor penalties', 'frequency drift'], 0, 'A GFCI trips on small leakage currents to ground, reducing shock hazard.', 'medium'],
+  ]),
+  ...questionGroup('ectle', 'ectle-technical', 'ectle-ra9292', [
+    ['Republic Act 9292 is known as the:', ['Electronics Engineering Law of 2004', 'Electrical Engineering Law of 2004', 'PRC Modernization Act', 'Consumer Protection Act'], 0, 'RA 9292 is the Electronics Engineering Law of 2004.', 'easy'],
+    ['The practice of electronics engineering in the Philippines is regulated by the:', ['PRC', 'DTI', 'DOE', 'NTC'], 0, 'The Professional Regulation Commission licenses and regulates the profession.', 'easy'],
+    ['Continuing professional development credits are generally required for:', ['licensure renewal', 'initial employment', 'graduation', 'internship'], 0, 'PRC requires CPD credits as a condition for renewal of professional licenses.', 'medium'],
   ]),
 ]
 
@@ -588,55 +529,41 @@ export const flashcards: Flashcard[] = [
     ['DRC', 'Design Rule Check'],
   ]),
 
-  ...flashcardGroup('ectle', 'ectle-basics', 'ectle-basics-components', [
-    ['Resistor bands brown–black–red', '1 kΩ (± tolerance band)'],
-    ['Energy stored in a capacitor', 'Electric field'],
-    ['Component that opposes change in current', 'Inductor'],
-  ]),
-  ...flashcardGroup('ectle', 'ectle-basics', 'ectle-basics-semi', [
-    ['Diode conducts when…', 'Forward biased'],
-    ['NPN emitter arrow', 'Points outward (Not Pointing iN)'],
-    ['Zener diode application', 'Voltage regulation'],
-  ]),
-  ...flashcardGroup('ectle', 'ectle-digital', 'ectle-dig-logic', [
-    ['XOR output is 1 when', 'Inputs are different'],
-    ['De Morgan: (A·B)′', 'A′ + B′'],
-  ]),
-  ...flashcardGroup('ectle', 'ectle-digital', 'ectle-dig-systems', [
+  ...flashcardGroup('ectle', 'ectle-technical', 'ectle-math-basic', [
     ['1010₂ in decimal', '10'],
-    ['One byte', '8 bits'],
+    ['Hexadecimal F', '15'],
   ]),
-  ...flashcardGroup('ectle', 'ectle-electrical', 'ectle-elec-dc', [
+  ...flashcardGroup('ectle', 'ectle-technical', 'ectle-ohm-law', [
+    ['Ohm’s law', 'V = I R'],
+    ['Power in a resistor', 'P = I²R = V²/R'],
+  ]),
+  ...flashcardGroup('ectle', 'ectle-technical', 'ectle-machines', [
+    ['Transformer function', 'Changes AC voltage level'],
+    ['Synchronous speed formula', 'Ns = 120f / P'],
+  ]),
+  ...flashcardGroup('ectle', 'ectle-technical', 'ectle-test-equipment', [
     ['Ammeter connection', 'In series with the load'],
     ['Voltmeter input resistance', 'Very high'],
   ]),
-  ...flashcardGroup('ectle', 'ectle-electrical', 'ectle-elec-ac', [
-    ['Philippine mains frequency', '60 Hz'],
-    ['Power factor', 'cos φ = real / apparent power'],
+  ...flashcardGroup('ectle', 'ectle-technical', 'ectle-components', [
+    ['Resistor bands brown–black–red', '1 kΩ'],
+    ['Diode conducts when…', 'Forward biased'],
   ]),
-  ...flashcardGroup('ectle', 'ectle-comm', 'ectle-comm-radio', [
-    ['Purpose of modulation', 'Impress information onto a carrier'],
-    ['AM broadcast band', '≈ 530–1700 kHz'],
-  ]),
-  ...flashcardGroup('ectle', 'ectle-comm', 'ectle-comm-data', [
-    ['Ethernet twisted-pair connector', 'RJ45'],
-    ['OSI layer of a hub', 'Physical (Layer 1)'],
-  ]),
-  ...flashcardGroup('ectle', 'ectle-industrial', 'ectle-ind-control', [
-    ['Relay', 'Electrically operated switch'],
-    ['Synchronous speed formula', 'Ns = 120f / P'],
-  ]),
-  ...flashcardGroup('ectle', 'ectle-industrial', 'ectle-ind-safety', [
-    ['First step before servicing', 'De-energise and lock out/tag out'],
+  ...flashcardGroup('ectle', 'ectle-technical', 'ectle-maintenance', [
+    ['Before servicing equipment', 'De-energise and lock out/tag out'],
     ['Purpose of a fuse', 'Overcurrent protection'],
   ]),
-  ...flashcardGroup('ectle', 'ectle-practical', 'ectle-prac-soldering', [
-    ['Traditional solder alloy', 'Tin and lead'],
-    ['Marks pin 1 on an IC', 'Notch or dot'],
+  ...flashcardGroup('ectle', 'ectle-technical', 'ectle-pec-electronics', [
+    ['Cable shield grounded to…', 'Reduce electromagnetic interference'],
+    ['Equipment enclosure grounding', 'Shock protection'],
   ]),
-  ...flashcardGroup('ectle', 'ectle-practical', 'ectle-prac-instruments', [
-    ['Oscilloscope displays', 'Voltage versus time'],
-    ['Function generator', 'Produces test waveforms'],
+  ...flashcardGroup('ectle', 'ectle-technical', 'ectle-pec-electrical', [
+    ['Philippine mains supply', '220 V, 60 Hz'],
+    ['GFCI', 'Ground-fault shock protection'],
+  ]),
+  ...flashcardGroup('ectle', 'ectle-technical', 'ectle-ra9292', [
+    ['RA 9292', 'Electronics Engineering Law of 2004'],
+    ['Regulates the profession', 'PRC'],
   ]),
 ]
 
