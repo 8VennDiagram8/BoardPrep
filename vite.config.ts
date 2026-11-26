@@ -5,6 +5,7 @@ import {
   extractQuestionsFromPdf,
   generateQuestions,
   sanitizeTopics,
+  solveQuestion,
   type GenerateQuestionsInput,
 } from './server/gemini.ts'
 
@@ -89,6 +90,35 @@ function geminiApiPlugin() {
           send(res, 200, { questions })
         } catch (error) {
           send(res, 400, { error: error instanceof Error ? error.message : 'PDF import failed' })
+        }
+      })
+
+      server.middlewares.use('/api/solve-question', async (req: any, res: any) => {
+        if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' })
+        try {
+          const body = await readJson(req) as {
+            prompt?: string
+            options?: string[]
+            programName?: string
+            subjectName?: string
+            topicName?: string
+          }
+          if (!body.prompt?.trim() || !Array.isArray(body.options) || body.options.length < 2) {
+            return send(res, 400, { error: 'A question and at least two options are required.' })
+          }
+          const solved = await solveQuestion(
+            {
+              prompt: body.prompt,
+              options: body.options,
+              programName: body.programName ?? 'Board exam',
+              subjectName: body.subjectName ?? 'Subject',
+              topicName: body.topicName ?? 'Topic',
+            },
+            getApiKey(),
+          )
+          send(res, 200, solved)
+        } catch (error) {
+          send(res, 400, { error: error instanceof Error ? error.message : 'Could not solve the question' })
         }
       })
     },

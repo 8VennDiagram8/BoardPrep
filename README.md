@@ -59,11 +59,11 @@ Open **Question Bank** in the sidebar. It has three tabs:
 
 - **Generate with AI** — pick a board, subject and scope (single topic, all topics in a subject, or all topics in the program), choose questions per topic, then generate. Every item has four options, one correct answer and a written solution.
 - **Import PDF** — upload a PDF (up to 20 MB). Large files are split into page batches in the browser and processed one batch at a time, so dense questionnaires (hundreds or thousands of items) aren't cut off by a single response limit. Choose **Pages per batch** (2–10; smaller = more thorough). With **auto-detect topic per question** on (default), each question is classified into the most relevant topic — even when the questionnaire is randomly ordered — and the preview groups questions by detected topic. You can turn it off to tag everything under one chosen topic.
-- **Type manually** — enter a question, four options, mark the correct one, and write the solution. Build a draft and save it when done; you can edit draft items before saving.
+- **Type manually** — enter a question and four options. If the answer isn't given, click **Generate answer & solution with Gemini** to have the correct option, explanation and difficulty filled in automatically. Build a draft and save it when done; you can edit draft items before saving.
 
 Saved questions immediately appear in practice, mock exams, analytics and flashcard topics.
 
-The browser calls BoardPrep's own `/api/generate-questions` and `/api/import-pdf` routes. The key is **server-side only** — set `GEMINI_API_KEY` in `.env.local` for development or in Vercel for production; there is no key field in the UI and the key is never sent to the browser. The model used is `gemini-3.6-flash` with structured JSON output and low thinking for faster generation.
+The browser calls BoardPrep's own `/api/generate-questions`, `/api/import-pdf` and `/api/solve-question` routes. The key is **server-side only** — set `GEMINI_API_KEY` in `.env.local` for development or in Vercel for production; there is no key field in the UI and the key is never sent to the browser. The model used is `gemini-3.6-flash` with structured JSON output and low thinking for faster generation.
 
 ```env
 GEMINI_API_KEY=your-gemini-api-key

@@ -47,6 +47,33 @@ export interface PdfImportRequest extends GenerateRequest {
   topics?: TopicCandidate[]
 }
 
+export interface SolveQuestionRequest {
+  prompt: string
+  options: string[]
+  programName: string
+  subjectName: string
+  topicName: string
+}
+
+export interface SolveResult {
+  answerIndex: number
+  explanation: string
+  difficulty: Difficulty
+}
+
+export async function solveQuestionRequest(request: SolveQuestionRequest): Promise<SolveResult> {
+  const response = await fetch('/api/solve-question', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+  const data = (await response.json().catch(() => ({}))) as SolveResult & { error?: string }
+  if (!response.ok) {
+    throw new Error(data.error ?? `Request failed with status ${response.status}.`)
+  }
+  return data
+}
+
 export async function importQuestionsFromPdf(
   request: PdfImportRequest,
   signal?: AbortSignal,

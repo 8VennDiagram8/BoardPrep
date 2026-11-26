@@ -265,6 +265,107 @@ export async function generateQuestions(
   return callGemini([{ text: buildPrompt({ ...input, count }) }], apiKey, input, count)
 }
 
+/** Solves a manually entered multiple-choice question. */
+export interface SolveQuestionInput {
+  prompt: string
+  options: string[]
+  programName: string
+  subjectName: string
+  topicName: string
+}
+
+export interface SolvedQuestion {
+  answerIndex: number
+  explanation: string
+  difficulty: Difficulty
+}
+
+const solveSchema = {
+  type: 'OBJECT',
+  properties: {
+    answerIndex: { type: 'INTEGER' },
+    explanation: { type: 'STRING' },
+    difficulty: { type: 'STRING', enum: ['easy', 'medium', 'hard'] },
+  },
+  required: ['answerIndex', 'explanation', 'difficulty'],
+}
+
+export async function solveQuestion(
+  input: SolveQuestionInput,
+  apiKey: string,
+): Promise<SolvedQuestion> {
+  const prompt = [
+    'You are an expert reviewer for Philippine engineering board exams.',
+    '',
+    'Determine the single correct answer to this multiple-choice question and write a concise solution.',
+    '',
+    `Board / program: ${input.programName}`,
+    `Subject: ${input.subjectName}`,
+    `Topic: ${input.topicName}`,
+    '',
+    'Question:',
+    input.prompt,
+    '',
+    'Options:',
+    ...input.options.map((option, index) => `${String.fromCharCode(65 + index)}. ${option}`),
+    '',
+    'The answerIndex must be the zero-based index of the correct option. The explanation should show the reasoning, formula or principle that makes it correct.',
+    'Return ONLY a JSON object matching the response schema.',
+  ].join('\n')
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: solveSchema,
+          thinkingConfig: { thinkingLevel: 'LOW' },
+          maxOutputTokens: 4096,
+        },
+      }),
+      signal: AbortSignal.timeout(60_000),
+    },
+  )
+
+  const raw = (await response.json().catch(() => ({}))) as Record<string, unknown>
+  if (!response.ok) {
+    const message =
+      (raw.error as { message?: string } | undefined)?.message ??
+      `Gemini API returned HTTP ${response.status}.`
+    throw new Error(message)
+  }
+
+  const candidates = raw.candidates as Array<{ content?: { parts?: Array<{ text?: string }> } }> | undefined
+  const text = candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? ''
+  if (!text) throw new Error('Gemini returned an empty response. Please try again.')
+
+  let parsed: { answerIndex?: unknown; explanation?: unknown; difficulty?: unknown }
+  try {
+    parsed = JSON.parse(stripCodeFence(text)) as typeof parsed
+  } catch {
+    throw new Error('Gemini returned a response that could not be parsed. Please try again.')
+  }
+
+  const answerIndex = typeof parsed.answerIndex === 'number' ? Math.floor(parsed.answerIndex) : -1
+  const explanation = typeof parsed.explanation === 'string' ? parsed.explanation.trim() : ''
+  if (answerIndex < 0 || answerIndex >= input.options.length || !explanation) {
+    throw new Error('Gemini could not determine a valid answer. Please try again.')
+  }
+
+  return {
+    answerIndex,
+    explanation,
+    difficulty: normaliseDifficulty(parsed.difficulty),
+  }
+}
+
 /** Extracts questions and answers from a base64-encoded PDF. */
 export async function extractQuestionsFromPdf(
   input: GenerateQuestionsInput,

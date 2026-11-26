@@ -17,7 +17,7 @@ import { Link } from 'react-router-dom'
 import { Badge, EmptyState, PageHeader } from '../components/ui'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
-import { GEMINI_MODEL, type TopicCandidate } from '../lib/gemini'
+import { GEMINI_MODEL, solveQuestionRequest, type TopicCandidate } from '../lib/gemini'
 import {
   cancelGenerateJob,
   cancelPdfJob,
@@ -673,7 +673,7 @@ function PdfImportPanel() {
 const emptyOptions = ['', '', '', '']
 
 function ManualPanel() {
-  const { subjectsForProgram, topicsForSubject, addQuestions } = useApp()
+  const { catalog, subjectsForProgram, topicsForSubject, addQuestions } = useApp()
   const [programId, setProgramId] = useState<ProgramId>('ecele')
   const [subjectId, setSubjectId] = useState(() => subjectsForProgram('ecele')[0]?.id ?? '')
   const [topicId, setTopicId] = useState('')
@@ -686,6 +686,8 @@ function ManualPanel() {
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [solving, setSolving] = useState(false)
+  const [solveError, setSolveError] = useState<string | null>(null)
 
   function handleProgram(next: ProgramId) {
     setProgramId(next)
@@ -733,6 +735,31 @@ function ManualPanel() {
     setDraft((current) => [...current, question])
     setSaved(false)
     resetForm()
+  }
+
+  async function solveWithGemini() {
+    setSolveError(null)
+    if (!prompt.trim() || options.some((option) => !option.trim())) {
+      setSolveError('Fill in the question and all four options first.')
+      return
+    }
+    setSolving(true)
+    try {
+      const solved = await solveQuestionRequest({
+        prompt: prompt.trim(),
+        options: options.map((option) => option.trim()),
+        programName: catalog.programs.find((item) => item.id === programId)?.name ?? programId,
+        subjectName: catalog.subjects.find((item) => item.id === subjectId)?.name ?? subjectId,
+        topicName: catalog.topics.find((item) => item.id === topicId)?.name ?? 'Topic',
+      })
+      setAnswerIndex(solved.answerIndex)
+      setExplanation(solved.explanation)
+      setDifficulty(solved.difficulty)
+    } catch (cause) {
+      setSolveError(cause instanceof Error ? cause.message : 'Could not solve the question.')
+    } finally {
+      setSolving(false)
+    }
   }
 
   function editQuestion(question: Question) {
@@ -793,6 +820,21 @@ function ManualPanel() {
               </div>
             ))}
           </div>
+
+          <button
+            type="button"
+            className="btn btn-secondary mb-4 w-full !text-xs"
+            onClick={() => void solveWithGemini()}
+            disabled={solving}
+          >
+            {solving ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}
+            {solving ? 'Asking Gemini…' : 'Generate answer & solution with Gemini'}
+          </button>
+          {solveError && (
+            <p className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+              {solveError}
+            </p>
+          )}
 
           <label className="mb-4 block">
             <span className="mb-1.5 block text-xs font-semibold text-muted">Solution / explanation</span>
