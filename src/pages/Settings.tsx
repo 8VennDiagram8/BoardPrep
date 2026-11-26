@@ -1,8 +1,9 @@
-import { Check, Download, Moon, ShieldCheck, Sun, Trash2, UserRound } from 'lucide-react'
+import { CalendarClock, Check, Download, Moon, Plus, ShieldCheck, Sun, Trash2, UserRound } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Badge, PageHeader } from '../components/ui'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
+import type { ProgramId } from '../lib/types'
 import { cn } from '../lib/utils'
 
 function Toggle({ checked, onChange, label, description }: {
@@ -36,15 +37,47 @@ function Toggle({ checked, onChange, label, description }: {
 
 export function Settings() {
   const { user, isDemoMode, updateName } = useAuth()
-  const { settings, updateSettings, attempts, clearProgress, catalog } = useApp()
+  const {
+    settings,
+    updateSettings,
+    attempts,
+    clearProgress,
+    catalog,
+    examDates,
+    addExamDate,
+    removeExamDate,
+  } = useApp()
   const [name, setName] = useState(user?.name ?? '')
   const [saved, setSaved] = useState(false)
+  const [examProgram, setExamProgram] = useState<ProgramId>('ecele')
+  const [examLabel, setExamLabel] = useState('')
+  const [examDate, setExamDate] = useState('')
+  const [examError, setExamError] = useState<string | null>(null)
+  const [examBusy, setExamBusy] = useState(false)
 
   function saveProfile(event: FormEvent) {
     event.preventDefault()
     updateName(name)
     setSaved(true)
     window.setTimeout(() => setSaved(false), 2000)
+  }
+
+  async function addExam(event: FormEvent) {
+    event.preventDefault()
+    setExamError(null)
+    if (!examDate) {
+      setExamError('Choose a date and time.')
+      return
+    }
+    if (new Date(examDate).getTime() <= Date.now()) {
+      setExamError('Choose a future date and time.')
+      return
+    }
+    setExamBusy(true)
+    await addExamDate({ programId: examProgram, label: examLabel, date: examDate })
+    setExamBusy(false)
+    setExamLabel('')
+    setExamDate('')
   }
 
   function exportProgress() {
@@ -101,6 +134,95 @@ export function Settings() {
             {user?.isGuest ? <Badge tone="warning">Guest</Badge> : <Badge tone="success">Signed in</Badge>}
             {isDemoMode && <Badge tone="brand">Demo mode</Badge>}
           </div>
+        </section>
+
+        {/* Board exam date */}
+        <section className="card p-5 sm:p-6">
+          <div className="mb-5 flex items-center gap-3">
+            <span className="grid size-10 place-items-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-300">
+              <CalendarClock size={19} />
+            </span>
+            <div>
+              <h2 className="heading text-base">Board exam date</h2>
+              <p className="text-xs text-muted">Add your exam date to see a live countdown on the dashboard.</p>
+            </div>
+          </div>
+
+          <form onSubmit={addExam} className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold text-muted">Program</span>
+              <select className="input" value={examProgram} onChange={(event) => setExamProgram(event.target.value as ProgramId)}>
+                {catalog.programs.map((item) => (
+                  <option key={item.id} value={item.id}>{item.code} — {item.shortName}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold text-muted">Label (optional)</span>
+              <input
+                className="input"
+                value={examLabel}
+                onChange={(event) => setExamLabel(event.target.value)}
+                placeholder="e.g. March 2027 board exam"
+              />
+            </label>
+            <label className="block sm:col-span-2">
+              <span className="mb-1.5 block text-xs font-semibold text-muted">Date and time</span>
+              <input
+                className="input"
+                type="datetime-local"
+                value={examDate}
+                onChange={(event) => setExamDate(event.target.value)}
+              />
+            </label>
+            {examError && (
+              <p className="sm:col-span-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+                {examError}
+              </p>
+            )}
+            <button type="submit" className="btn btn-primary sm:col-span-2" disabled={examBusy}>
+              <Plus size={16} /> {examBusy ? 'Adding…' : 'Add exam date'}
+            </button>
+          </form>
+
+          {examDates.length > 0 && (
+            <div className="mt-5 divide-y divide-line border-t border-line">
+              {examDates.map((item) => {
+                const days = Math.ceil((new Date(item.date).getTime() - Date.now()) / 86_400_000)
+                const itemProgram = catalog.programs.find((program) => program.id === item.programId)
+                return (
+                  <div key={item.id} className="flex items-center gap-3 py-3">
+                    <Badge tone="brand">{itemProgram?.code}</Badge>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">
+                        {item.label || `${itemProgram?.shortName} board exam`}
+                      </p>
+                      <p className="text-xs text-muted">
+                        {new Intl.DateTimeFormat('en-PH', {
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        }).format(new Date(item.date))}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-xs font-bold text-brand-600 dark:text-brand-400">
+                      {days > 0 ? `${days} days left` : days === 0 ? 'Today' : 'Passed'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void removeExamDate(item.id)}
+                      className="btn btn-ghost size-8 !px-0"
+                      title="Remove exam date"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </section>
 
         {/* Study preferences */}

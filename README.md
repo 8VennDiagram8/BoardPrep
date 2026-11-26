@@ -19,6 +19,7 @@ The catalog is data-driven, so more programs, subjects and topics can be added l
 - **Question bank tools** — generate questions with `gemini-3.6-flash`, extract them from uploaded PDFs, or type them manually — all with answers and solutions
 - Progress analytics: accuracy trend, mastery table, streak and session history
 - Guest (demo) mode plus Supabase email/password authentication
+- **Board exam countdown** — add your exam date/time in Settings and see a live days/hours/minutes/seconds countdown on the dashboard
 - Light/dark themes, responsive layout, JSON progress export
 
 ## Quick start
@@ -34,7 +35,7 @@ Open http://localhost:5173. With no environment variables the app runs in **demo
 
 1. Create a Supabase project.
 2. Run [`supabase/migrations/001_init.sql`](supabase/migrations/001_init.sql) in the SQL editor.
-3. Run migrations `002_generated_questions.sql`, `003_manual_question_source.sql` and `004_question_ownership.sql` in order (generated/manual question columns, insert policy, and per-account ownership).
+3. Run migrations `002_generated_questions.sql`, `003_manual_question_source.sql`, `004_question_ownership.sql` and `005_exam_dates.sql` in order.
 4. Run [`supabase/seed.sql`](supabase/seed.sql) to load the starter question bank.
 5. Copy `.env.example` to `.env.local` and fill in your project URL and anon key.
 6. Restart the dev server.
@@ -50,7 +51,7 @@ The app falls back to the bundled catalog if Supabase is unreachable, so it stil
 
 ### Per-account data
 
-Every signed-in account has its own data. localStorage keys are suffixed with the account id (`boardprep:settings:<id>`, `boardprep:attempts:<id>`, `boardprep:known:<id>`, `boardprep:custom-questions:<id>`), and guests get their own generated guest id. In Supabase, `attempts` and user-added `questions` have a `user_id` and RLS policies that expose only the owner's rows. The bundled seed catalog is shared and read-only. Switching accounts on the same browser therefore never mixes progress, preferences, flashcard marks or generated questions.
+Every signed-in account has its own data. localStorage keys are suffixed with the account id (`boardprep:settings:<id>`, `boardprep:attempts:<id>`, `boardprep:known:<id>`, `boardprep:custom-questions:<id>`, `boardprep:exam-dates:<id>`), and guests get their own generated guest id. In Supabase, `attempts` and user-added `questions` have a `user_id` and RLS policies that expose only the owner's rows. The bundled seed catalog is shared and read-only. Switching accounts on the same browser therefore never mixes progress, preferences, flashcard marks or generated questions.
 
 ## Question bank tools
 

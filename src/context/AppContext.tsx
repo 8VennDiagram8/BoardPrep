@@ -8,12 +8,23 @@ import {
   type ReactNode,
 } from 'react'
 import { seedCatalog } from '../data/seed'
-import { addQuestions, clearAttempts, getAttempts, getCatalog, saveAttempt } from '../lib/api'
+import {
+  addExamDate,
+  addQuestions,
+  clearAttempts,
+  deleteExamDate,
+  getAttempts,
+  getCatalog,
+  getExamDates,
+  saveAttempt,
+  type ExamDateInput,
+} from '../lib/api'
 import { readLocal, removeLocal, writeLocal } from '../lib/local'
 import { DEFAULT_SETTINGS } from '../lib/types'
 import type {
   Attempt,
   Catalog,
+  ExamDate,
   Flashcard,
   Program,
   ProgramId,
@@ -62,10 +73,13 @@ interface AppContextValue {
   catalog: Catalog
   attempts: Attempt[]
   loadingAttempts: boolean
+  examDates: ExamDate[]
   settings: StudySettings
   updateSettings: (patch: Partial<StudySettings>) => void
   recordAttempt: (attempt: Attempt) => Promise<void>
   clearProgress: () => Promise<void>
+  addExamDate: (input: ExamDateInput) => Promise<ExamDate>
+  removeExamDate: (id: string) => Promise<void>
   addQuestions: (questions: Question[]) => Promise<void>
   refreshCatalog: () => Promise<void>
   program: (id: ProgramId | string | undefined) => Program | undefined
@@ -89,6 +103,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [catalog, setCatalog] = useState<Catalog>(seedCatalog)
   const [attempts, setAttempts] = useState<Attempt[]>([])
   const [loadingAttempts, setLoadingAttempts] = useState(false)
+  const [examDates, setExamDates] = useState<ExamDate[]>([])
   const [settings, setSettings] = useState<StudySettings>(() => loadSettings(userId))
   const [settingsOwner, setSettingsOwner] = useState<string | null>(null)
 
@@ -132,6 +147,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [userId])
 
+  useEffect(() => {
+    let active = true
+    void getExamDates(userId).then((items) => {
+      if (active) setExamDates(items)
+    })
+    return () => {
+      active = false
+    }
+  }, [userId])
+
   const updateSettings = useCallback((patch: Partial<StudySettings>) => {
     setSettings((current) => ({ ...current, ...patch }))
   }, [])
@@ -150,6 +175,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await clearAttempts(userId)
     setAttempts([])
   }, [userId])
+
+  const createExamDate = useCallback(
+    async (input: ExamDateInput) => {
+      const saved = await addExamDate(input, userId)
+      setExamDates((current) =>
+        [...current.filter((item) => item.id !== saved.id), saved].sort((a, b) =>
+          a.date.localeCompare(b.date),
+        ),
+      )
+      return saved
+    },
+    [userId],
+  )
+
+  const removeExamDate = useCallback(
+    async (id: string) => {
+      await deleteExamDate(id, userId)
+      setExamDates((current) => current.filter((item) => item.id !== id))
+    },
+    [userId],
+  )
 
   const refreshCatalog = useCallback(async () => {
     setCatalog(await getCatalog(userId))
@@ -244,10 +290,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       catalog,
       attempts,
       loadingAttempts,
+      examDates,
       settings,
       updateSettings,
       recordAttempt,
       clearProgress,
+      addExamDate: createExamDate,
+      removeExamDate,
       addQuestions: addGeneratedQuestions,
       refreshCatalog,
       program,
@@ -266,10 +315,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     catalog,
     attempts,
     loadingAttempts,
+    examDates,
     settings,
     updateSettings,
     recordAttempt,
     clearProgress,
+    createExamDate,
+    removeExamDate,
     addGeneratedQuestions,
     refreshCatalog,
   ])

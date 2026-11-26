@@ -1,9 +1,10 @@
 import { seedCatalog } from '../data/seed'
-import { readLocal, removeLocal, writeLocal } from './local'
+import { createId, readLocal, removeLocal, writeLocal } from './local'
 import { supabase } from './supabase'
 import type {
   Attempt,
   Catalog,
+  ExamDate,
   Flashcard,
   Program,
   ProgramId,
@@ -248,6 +249,92 @@ export async function clearAttempts(userId: string): Promise<void> {
   if (!supabase) return
   try {
     await supabase.from('attempts').delete().eq('user_id', userId)
+  } catch {
+    /* no-op */
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Board exam dates                                                           */
+/* -------------------------------------------------------------------------- */
+
+function examDatesKey(userId: string): string {
+  return `exam-dates:${userId}`
+}
+
+function localExamDates(userId: string): ExamDate[] {
+  return readLocal<ExamDate[]>(examDatesKey(userId), [])
+}
+
+function saveLocalExamDates(userId: string, dates: ExamDate[]): void {
+  writeLocal(examDatesKey(userId), dates)
+}
+
+function mapExamDate(row: DbRow): ExamDate {
+  return {
+    id: row.id as string,
+    programId: row.program_id as ProgramId,
+    label: row.label ?? '',
+    date: row.exam_at as string,
+    createdAt: row.created_at as string,
+  }
+}
+
+export async function getExamDates(userId: string): Promise<ExamDate[]> {
+  const local = localExamDates(userId)
+  if (!supabase) return local
+
+  try {
+    const { data, error } = await supabase
+      .from('exam_dates')
+      .select('*')
+      .eq('user_id', userId)
+      .order('exam_at', { ascending: true })
+    if (error || !data) return local
+    return data.map(mapExamDate)
+  } catch {
+    return local
+  }
+}
+
+export interface ExamDateInput {
+  programId: ProgramId
+  label: string
+  date: string
+}
+
+export async function addExamDate(input: ExamDateInput, userId: string): Promise<ExamDate> {
+  const examDate: ExamDate = {
+    id: createId(),
+    programId: input.programId,
+    label: input.label.trim(),
+    date: new Date(input.date).toISOString(),
+    createdAt: new Date().toISOString(),
+  }
+  saveLocalExamDates(userId, [...localExamDates(userId), examDate])
+
+  if (supabase) {
+    try {
+      await supabase.from('exam_dates').insert({
+        id: examDate.id,
+        user_id: userId,
+        program_id: examDate.programId,
+        label: examDate.label,
+        exam_at: examDate.date,
+        created_at: examDate.createdAt,
+      })
+    } catch {
+      /* Local copy is already saved. */
+    }
+  }
+  return examDate
+}
+
+export async function deleteExamDate(id: string, userId: string): Promise<void> {
+  saveLocalExamDates(userId, localExamDates(userId).filter((item) => item.id !== id))
+  if (!supabase) return
+  try {
+    await supabase.from('exam_dates').delete().eq('id', id).eq('user_id', userId)
   } catch {
     /* no-op */
   }

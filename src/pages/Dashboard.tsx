@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   BookOpen,
+  CalendarClock,
   CalendarDays,
   ChevronRight,
   Clock3,
@@ -13,6 +14,7 @@ import {
 import { Link } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
+import { ExamCountdown } from '../components/ExamCountdown'
 import { accentStyles, Badge, EmptyState, PageHeader, ProgressBar, ProgressRing, StatCard } from '../components/ui'
 import { formatDate, formatDuration, greeting, percent } from '../lib/utils'
 
@@ -21,6 +23,7 @@ export function Dashboard() {
   const {
     catalog,
     attempts,
+    examDates,
     program,
     subject,
     topic,
@@ -44,6 +47,10 @@ export function Dashboard() {
     .filter((item) => item.mastery.answered > 0)
     .sort((a, b) => a.mastery.accuracy - b.mastery.accuracy)
     .slice(0, 3)
+
+  const nextExam = examDates
+    .filter((item) => new Date(item.date).getTime() > Date.now())
+    .sort((a, b) => a.date.localeCompare(b.date))[0]
 
   const firstName = (user?.name ?? 'Engineer').split(' ')[0]
 
@@ -114,6 +121,49 @@ export function Dashboard() {
         <StatCard icon={<Clock3 size={18} />} label="Mock exams" value={mocks} hint="Timed full-length runs" tone="amber" />
         <StatCard icon={<BookOpen size={18} />} label="Topics covered" value={`${touchedTopics}/${catalog.topics.length}`} hint="Unique topics practiced" tone="cyan" />
       </div>
+
+      {/* Board exam countdown */}
+      <section className="mb-8">
+        {nextExam ? (
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-brand-900 p-5 text-white shadow-xl sm:p-6">
+            <div className="pointer-events-none absolute -right-20 -top-24 size-72 rounded-full bg-brand-500/20 blur-3xl" />
+            <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <Badge className="border-white/20 bg-white/15 text-white">
+                    <CalendarClock size={12} /> Next board exam
+                  </Badge>
+                  <Badge className="border-white/20 bg-white/10 text-white">
+                    {program(nextExam.programId)?.code}
+                  </Badge>
+                </div>
+                <h2 className="heading text-xl sm:text-2xl">
+                  {nextExam.label || `${program(nextExam.programId)?.shortName} board exam`}
+                </h2>
+                <p className="mt-1 text-xs text-white/70">Stay consistent — every session counts.</p>
+              </div>
+              <div className="w-full lg:max-w-md">
+                <ExamCountdown date={nextExam.date} />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="card flex flex-wrap items-center gap-4 p-5">
+            <span className="grid size-12 place-items-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-300">
+              <CalendarClock size={22} />
+            </span>
+            <div className="flex-1">
+              <h2 className="heading text-base">Set your board exam date</h2>
+              <p className="mt-1 text-xs text-muted">
+                Add your exam date in Settings and a live countdown will appear here.
+              </p>
+            </div>
+            <Link to="/settings" className="btn btn-secondary !text-xs">
+              Add exam date <ArrowRight size={14} />
+            </Link>
+          </div>
+        )}
+      </section>
 
       {/* Programs */}
       <section className="mb-8">

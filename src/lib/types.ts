@@ -93,6 +93,16 @@ export interface Attempt {
   answers: AnswerRecord[]
 }
 
+export interface ExamDate {
+  id: string
+  programId: ProgramId
+  /** Optional label, e.g. "March 2027 board exam". */
+  label: string
+  /** Local date-time string, e.g. "2027-03-15T08:00". */
+  date: string
+  createdAt: string
+}
+
 export interface UserProfile {
   id: string
   email: string
