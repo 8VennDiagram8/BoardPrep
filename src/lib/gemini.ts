@@ -1,4 +1,4 @@
-import type { Difficulty, ProgramId, Question } from './types'
+import type { Difficulty, Flashcard, ProgramId, Question } from './types'
 
 export interface GenerateRequest {
   programId: ProgramId
@@ -45,6 +45,34 @@ export interface PdfImportRequest extends GenerateRequest {
   fileData: string
   autoDetectTopic?: boolean
   topics?: TopicCandidate[]
+}
+
+export interface FlashcardTarget {
+  id: string
+  programId: ProgramId
+  subjectId: string
+  name: string
+  programName: string
+  subjectName: string
+}
+
+export async function requestGeneratedFlashcards(
+  targets: FlashcardTarget[],
+  perTopic: number,
+): Promise<Flashcard[]> {
+  const response = await fetch('/api/generate-flashcards', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ targets, perTopic }),
+  })
+  const data = (await response.json().catch(() => ({}))) as {
+    flashcards?: Flashcard[]
+    error?: string
+  }
+  if (!response.ok) {
+    throw new Error(data.error ?? `Request failed with status ${response.status}.`)
+  }
+  return data.flashcards ?? []
 }
 
 export interface SolveQuestionRequest {

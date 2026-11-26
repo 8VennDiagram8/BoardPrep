@@ -3,11 +3,13 @@ import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv } from 'vite'
 import {
   extractQuestionsFromPdf,
+  generateFlashcards,
   generateQuestions,
   sanitizeTopics,
   solveQuestion,
   type GenerateQuestionsInput,
 } from './server/gemini.ts'
+import type { ProgramId } from './src/lib/types.ts'
 
 interface ImportBody extends Partial<GenerateQuestionsInput> {
   fileName?: string
@@ -90,6 +92,41 @@ function geminiApiPlugin() {
           send(res, 200, { questions })
         } catch (error) {
           send(res, 400, { error: error instanceof Error ? error.message : 'PDF import failed' })
+        }
+      })
+
+      server.middlewares.use('/api/generate-flashcards', async (req: any, res: any) => {
+        if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' })
+        try {
+          const body = await readJson(req) as {
+            targets?: Array<{
+              id?: string
+              programId?: ProgramId
+              subjectId?: string
+              name?: string
+              programName?: string
+              subjectName?: string
+            }>
+            perTopic?: number
+          }
+          if (!body.targets?.length) return send(res, 400, { error: 'At least one topic is required.' })
+          const cards = await generateFlashcards(
+            {
+              targets: body.targets.map((target) => ({
+                id: target.id!,
+                programId: target.programId!,
+                subjectId: target.subjectId!,
+                name: target.name ?? 'Topic',
+                programName: target.programName ?? 'Board exam',
+                subjectName: target.subjectName ?? 'Subject',
+              })),
+              perTopic: body.perTopic ?? 5,
+            },
+            getApiKey(),
+          )
+          send(res, 200, { flashcards: cards })
+        } catch (error) {
+          send(res, 400, { error: error instanceof Error ? error.message : 'Flashcard generation failed' })
         }
       })
 

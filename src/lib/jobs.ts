@@ -3,14 +3,16 @@
  * page components, so switching tabs or routes never interrupts them.
  */
 import { useSyncExternalStore } from 'react'
-import { addQuestions } from './api'
+import { addFlashcards, addQuestions } from './api'
 import {
   importQuestionsFromPdf,
+  requestGeneratedFlashcards,
   requestGeneratedQuestions,
+  type FlashcardTarget,
   type PdfImportRequest,
   type TopicCandidate,
 } from './gemini'
-import type { Difficulty, ProgramId, Question } from './types'
+import type { Difficulty, Flashcard, ProgramId, Question } from './types'
 
 interface GenerateBatch {
   topicId: string
@@ -36,9 +38,20 @@ interface PdfJob {
   error: string | null
 }
 
+interface FlashcardJob {
+  running: boolean
+  progress: string
+  cards: Flashcard[]
+  savedCount: number
+  finished: boolean
+  cancelled: boolean
+  error: string | null
+}
+
 interface JobState {
   generate: GenerateJob
   pdf: PdfJob
+  flashcards: FlashcardJob
 }
 
 const initialGenerate: GenerateJob = {
@@ -60,9 +73,20 @@ const initialPdf: PdfJob = {
   error: null,
 }
 
+const initialFlashcards: FlashcardJob = {
+  running: false,
+  progress: '',
+  cards: [],
+  savedCount: 0,
+  finished: false,
+  cancelled: false,
+  error: null,
+}
+
 let state: JobState = {
   generate: { ...initialGenerate },
   pdf: { ...initialPdf },
+  flashcards: { ...initialFlashcards },
 }
 
 const listeners = new Set<() => void>()
@@ -87,6 +111,11 @@ function patchGenerate(patch: Partial<GenerateJob>) {
 
 function patchPdf(patch: Partial<PdfJob>) {
   state = { ...state, pdf: { ...state.pdf, ...patch } }
+  emit()
+}
+
+function patchFlashcards(patch: Partial<FlashcardJob>) {
+  state = { ...state, flashcards: { ...state.flashcards, ...patch } }
   emit()
 }
 
@@ -326,4 +355,94 @@ export function removePdfQuestion(questionId: string): void {
 export function cancelPdfJob(): void {
   pdfController?.abort()
   patchPdf({ cancelled: true, progress: 'Cancelling after the current batch…' })
+}
+
+/* -------------------------------------------------------------------------- */
+/* Conceptual flashcards                                                      */
+/* -------------------------------------------------------------------------- */
+
+export interface FlashcardJobInput {
+  targets: FlashcardTarget[]
+  perTopic: number
+  userId: string
+  existingFronts: string[]
+}
+
+let flashcardController: AbortController | null = null
+
+function normaliseFront(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+export function startFlashcardJob(input: FlashcardJobInput): void {
+  if (state.flashcards.running) return
+
+  const controller = new AbortController()
+  flashcardController = controller
+  patchFlashcards({
+    running: true,
+    progress: 'Generating conceptual flashcards…',
+    cards: [],
+    savedCount: 0,
+    finished: false,
+    cancelled: false,
+    error: null,
+  })
+
+  void (async () => {
+    const collected: Flashcard[] = []
+    const seen = new Set(input.existingFronts.map(normaliseFront))
+    const failures: string[] = []
+
+    try {
+      for (let index = 0; index < input.targets.length; index += 1) {
+        if (controller.signal.aborted) break
+        const target = input.targets[index]
+        patchFlashcards({
+          progress: `${target.name} — ${index + 1} of ${input.targets.length} · ${collected.length} cards so far`,
+        })
+        try {
+          const found = await retryOnDemand(
+            () => requestGeneratedFlashcards([target], input.perTopic),
+            controller.signal,
+          )
+          if (controller.signal.aborted) break
+          const fresh: Flashcard[] = []
+          for (const card of found) {
+            const key = normaliseFront(card.front)
+            if (!key || seen.has(key)) continue
+            seen.add(key)
+            fresh.push(card)
+            collected.push(card)
+          }
+          if (fresh.length > 0) {
+            await addFlashcards(fresh, input.userId)
+            patchFlashcards({ cards: [...collected], savedCount: collected.length })
+          }
+        } catch (cause) {
+          if (controller.signal.aborted) break
+          failures.push(`${target.name}: ${cause instanceof Error ? cause.message : 'failed'}`)
+        }
+      }
+
+      if (!controller.signal.aborted) {
+        patchFlashcards({
+          finished: true,
+          error: failures.length > 0 ? `${failures.length} topic(s) failed. ${failures[0]}` : null,
+        })
+      }
+    } catch (cause) {
+      if (!controller.signal.aborted) {
+        patchFlashcards({ error: cause instanceof Error ? cause.message : 'Flashcard generation failed.' })
+      }
+    } finally {
+      patchFlashcards({ running: false, progress: '' })
+      flashcardController = null
+    }
+  })()
+}
+
+export function cancelFlashcardJob(): void {
+  flashcardController?.abort()
+  patchFlashcards({ cancelled: true, progress: 'Cancelling after the current topic…' })
 }

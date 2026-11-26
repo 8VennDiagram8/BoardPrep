@@ -13,6 +13,7 @@ import {
   addQuestions,
   clearAttempts,
   deleteExamDate,
+  addFlashcards,
   getAttempts,
   getCatalog,
   getExamDates,
@@ -81,6 +82,7 @@ interface AppContextValue {
   addExamDate: (input: ExamDateInput) => Promise<ExamDate>
   removeExamDate: (id: string) => Promise<void>
   addQuestions: (questions: Question[]) => Promise<void>
+  addFlashcards: (cards: Flashcard[]) => Promise<void>
   refreshCatalog: () => Promise<void>
   program: (id: ProgramId | string | undefined) => Program | undefined
   subject: (id: string | undefined) => Subject | undefined
@@ -197,6 +199,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [userId],
   )
 
+  const addGeneratedFlashcards = useCallback(
+    async (cards: Flashcard[]) => {
+      await addFlashcards(cards, userId)
+      setCatalog((current) => {
+        const ids = new Set(current.flashcards.map((card) => card.id))
+        return {
+          ...current,
+          flashcards: [...current.flashcards, ...cards.filter((card) => !ids.has(card.id))],
+        }
+      })
+    },
+    [userId],
+  )
+
   const refreshCatalog = useCallback(async () => {
     setCatalog(await getCatalog(userId))
   }, [userId])
@@ -298,6 +314,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addExamDate: createExamDate,
       removeExamDate,
       addQuestions: addGeneratedQuestions,
+      addFlashcards: addGeneratedFlashcards,
       refreshCatalog,
       program,
       subject,
@@ -323,6 +340,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     createExamDate,
     removeExamDate,
     addGeneratedQuestions,
+    addGeneratedFlashcards,
     refreshCatalog,
   ])
 

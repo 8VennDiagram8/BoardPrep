@@ -57,6 +57,9 @@ export interface Flashcard {
   topicId: string
   front: string
   back: string
+  source?: 'seed' | 'generated' | 'manual'
+  generatedAt?: string
+  userId?: string
 }
 
 export interface Catalog {

@@ -4,7 +4,7 @@
  *
  * Model: gemini-3.6-flash (Google AI Studio / Gemini API)
  */
-import type { Difficulty, ProgramId, Question } from '../src/lib/types.ts'
+import type { Difficulty, Flashcard, ProgramId, Question } from '../src/lib/types.ts'
 
 export const GEMINI_MODEL = 'gemini-3.6-flash'
 
@@ -263,6 +263,129 @@ export async function generateQuestions(
 ): Promise<Question[]> {
   const count = Math.min(20, Math.max(1, Math.floor(Number(input.count) || 5)))
   return callGemini([{ text: buildPrompt({ ...input, count }) }], apiKey, input, count)
+}
+
+export interface FlashcardTarget {
+  id: string
+  programId: ProgramId
+  subjectId: string
+  name: string
+  programName: string
+  subjectName: string
+}
+
+export interface FlashcardGenerateInput {
+  targets: FlashcardTarget[]
+  perTopic: number
+}
+
+const flashcardSchema = {
+  type: 'OBJECT',
+  properties: {
+    flashcards: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          front: { type: 'STRING' },
+          back: { type: 'STRING' },
+        },
+        required: ['front', 'back'],
+      },
+    },
+  },
+  required: ['flashcards'],
+}
+
+/** Creates purely conceptual flashcards, not calculation drills. */
+export async function generateFlashcards(
+  input: FlashcardGenerateInput,
+  apiKey: string,
+): Promise<Flashcard[]> {
+  const instructions = input.targets.map((target, index) =>
+    `${index + 1}. Program: ${target.programName}; Subject: ${target.subjectName}; Topic: ${target.name} (topicId: ${target.id}) — create ${input.perTopic} cards.`,
+  )
+
+  const prompt = [
+    'You create flashcards for Philippine engineering board exam review.',
+    '',
+    'IMPORTANT: Cards must be purely CONCEPTUAL. Write concept-check questions and the concepts themselves as found in standard textbooks and review books. Never write numerical problems, calculations, or "solve for X" items. Do not ask the learner to compute anything.',
+    '',
+    'Good fronts: "What does the Nyquist sampling theorem state?", "What is the purpose of a Zener diode?", "Which principle explains why a conductor has low resistivity?"',
+    'Good backs: one concise textbook concept, definition, rule, code provision or principle — with no numbers to calculate.',
+    '',
+    'Create cards for each of these topics:',
+    ...instructions,
+    '',
+    'Set topicId to the exact topicId shown for each topic.',
+    'Return ONLY a JSON object matching the response schema. No extra commentary.',
+  ].join('\n')
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: flashcardSchema,
+          thinkingConfig: { thinkingLevel: 'LOW' },
+          maxOutputTokens: 16384,
+        },
+      }),
+      signal: AbortSignal.timeout(120_000),
+    },
+  )
+
+  const raw = (await response.json().catch(() => ({}))) as Record<string, unknown>
+  if (!response.ok) {
+    const message =
+      (raw.error as { message?: string } | undefined)?.message ??
+      `Gemini API returned HTTP ${response.status}.`
+    throw new Error(message)
+  }
+
+  const candidates = raw.candidates as Array<{ content?: { parts?: Array<{ text?: string }> } }> | undefined
+  const text = candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? ''
+  if (!text) throw new Error('Gemini returned an empty response. Please try again.')
+
+  let parsed: { flashcards?: Array<{ front?: unknown; back?: unknown; topicId?: unknown }> }
+  try {
+    parsed = JSON.parse(stripCodeFence(text)) as typeof parsed
+  } catch {
+    throw new Error('Gemini returned a response that could not be parsed. Please try again.')
+  }
+
+  const cards: Flashcard[] = []
+  for (const item of parsed.flashcards ?? []) {
+    const front = typeof item.front === 'string' ? item.front.trim() : ''
+    const back = typeof item.back === 'string' ? item.back.trim() : ''
+    const requested = typeof item.topicId === 'string' ? item.topicId : ''
+    const target = input.targets.find((candidate) => candidate.id === requested)
+    const fallback = input.targets.find((candidate) =>
+      cards.filter((card) => card.topicId === candidate.id).length < input.perTopic,
+    ) ?? input.targets[0]
+    const chosen = target ?? fallback
+    if (!front || !back || !chosen) continue
+    cards.push({
+      id: `gen-card-${chosen.id}-${crypto.randomUUID()}`,
+      programId: chosen.programId,
+      subjectId: chosen.subjectId,
+      topicId: chosen.id,
+      front,
+      back,
+      source: 'generated',
+      generatedAt: new Date().toISOString(),
+    })
+  }
+
+  if (cards.length === 0) throw new Error('No valid flashcards were generated. Please try again.')
+  return cards
 }
 
 /** Solves a manually entered multiple-choice question. */

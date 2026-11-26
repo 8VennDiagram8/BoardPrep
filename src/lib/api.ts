@@ -74,6 +74,9 @@ function mapFlashcard(row: DbRow): Flashcard {
     topicId: row.topic_id ?? '',
     front: row.front ?? '',
     back: row.back ?? '',
+    source: row.source === 'generated' || row.source === 'manual' ? row.source : 'seed',
+    generatedAt: row.generated_at ?? undefined,
+    userId: row.user_id ?? undefined,
   }
 }
 
@@ -81,9 +84,18 @@ function customQuestionsKey(userId: string): string {
   return `custom-questions:${userId}`
 }
 
+function customFlashcardsKey(userId: string): string {
+  return `custom-flashcards:${userId}`
+}
+
 /* -------------------------------------------------------------------------- */
 /* Catalog                                                                    */
 /* -------------------------------------------------------------------------- */
+
+/** Flashcards generated/typed by one account and kept in that browser. */
+export function getLocalFlashcards(userId: string): Flashcard[] {
+  return readLocal<Flashcard[]>(customFlashcardsKey(userId), [])
+}
 
 /** Questions generated/typed by one account and kept in that browser. */
 export function getLocalQuestions(userId: string): Question[] {
@@ -99,13 +111,21 @@ export function getLocalQuestions(userId: string): Question[] {
   return []
 }
 
-function withLocalQuestions(catalog: Catalog, userId: string): Catalog {
-  const custom = getLocalQuestions(userId)
-  if (custom.length === 0) return catalog
-  const ids = new Set(catalog.questions.map((question) => question.id))
+function withLocalContent(catalog: Catalog, userId: string): Catalog {
+  const customQuestions = getLocalQuestions(userId)
+  const customFlashcards = getLocalFlashcards(userId)
+  const questionIds = new Set(catalog.questions.map((question) => question.id))
+  const flashcardIds = new Set(catalog.flashcards.map((card) => card.id))
   return {
     ...catalog,
-    questions: [...catalog.questions, ...custom.filter((question) => !ids.has(question.id))],
+    questions: [
+      ...catalog.questions,
+      ...customQuestions.filter((question) => !questionIds.has(question.id)),
+    ],
+    flashcards: [
+      ...catalog.flashcards,
+      ...customFlashcards.filter((card) => !flashcardIds.has(card.id)),
+    ],
   }
 }
 
@@ -115,7 +135,7 @@ function withLocalQuestions(catalog: Catalog, userId: string): Catalog {
  * demo catalog so the reviewer is always usable — including offline.
  */
 export async function getCatalog(userId: string): Promise<Catalog> {
-  if (!supabase) return withLocalQuestions(seedCatalog, userId)
+  if (!supabase) return withLocalContent(seedCatalog, userId)
 
   try {
     const [programs, subjects, topics, questions, flashcards] = await Promise.all([
@@ -128,10 +148,10 @@ export async function getCatalog(userId: string): Promise<Catalog> {
 
     const results = [programs, subjects, topics, questions, flashcards]
     if (results.some((result) => result.error) || !programs.data?.length) {
-      return withLocalQuestions(seedCatalog, userId)
+      return withLocalContent(seedCatalog, userId)
     }
 
-    return withLocalQuestions({
+    return withLocalContent({
       programs: (programs.data ?? []).map(mapProgram),
       subjects: (subjects.data ?? []).map(mapSubject),
       topics: (topics.data ?? []).map(mapTopic),
@@ -139,7 +159,7 @@ export async function getCatalog(userId: string): Promise<Catalog> {
       flashcards: (flashcards.data ?? []).map(mapFlashcard),
     }, userId)
   } catch {
-    return withLocalQuestions(seedCatalog, userId)
+    return withLocalContent(seedCatalog, userId)
   }
 }
 
@@ -169,6 +189,37 @@ export async function addQuestions(questions: Question[], userId: string): Promi
         difficulty: question.difficulty,
         source: question.source ?? 'generated',
         generated_at: question.generatedAt ?? null,
+        user_id: userId,
+      })),
+    )
+  } catch {
+    /* Local copy is already saved. */
+  }
+}
+
+/** Persists one account's flashcards locally and, when available, to Supabase. */
+export async function addFlashcards(cards: Flashcard[], userId: string): Promise<void> {
+  if (cards.length === 0) return
+
+  const existing = getLocalFlashcards(userId)
+  const ids = new Set(existing.map((card) => card.id))
+  writeLocal(
+    customFlashcardsKey(userId),
+    [...existing, ...cards.filter((card) => !ids.has(card.id))].slice(0, 4000),
+  )
+
+  if (!supabase) return
+  try {
+    await supabase.from('flashcards').upsert(
+      cards.map((card) => ({
+        id: card.id,
+        program_id: card.programId,
+        subject_id: card.subjectId,
+        topic_id: card.topicId,
+        front: card.front,
+        back: card.back,
+        source: card.source ?? 'generated',
+        generated_at: card.generatedAt ?? null,
         user_id: userId,
       })),
     )
