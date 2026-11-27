@@ -69,6 +69,54 @@ const responseSchema = {
   required: ['questions'],
 }
 
+/**
+ * Shared persona and domain grounding. Keeps generated content tied to the
+ * actual PRC board exam instead of drifting into generic textbook material.
+ */
+function examinerGuidance(
+  programId: ProgramId,
+  programName: string,
+  subjectName: string,
+  topicName: string,
+): string[] {
+  const discipline =
+    programId === 'ecele'
+      ? 'Electronics and Communications Engineering (ECE)'
+      : 'Electronics Technician (ET) practice'
+  const subject = subjectName.toLowerCase()
+
+  const lines = [
+    'You are a Philippine PRC board examiner writing material for this specific licensure exam. Think like an examiner who sets the actual board exam — not a generic textbook author.',
+    `Exam: ${programName} (${programId.toUpperCase()}) — ${discipline}.`,
+    `Subject: ${subjectName}. Topic: ${topicName}.`,
+    'Every item must be relevant to this exam and this discipline. Never write questions from unrelated fields or with no connection to the profession.',
+  ]
+
+  if (subject.includes('math')) {
+    lines.push(
+      'This is a mathematics subject, but frame every problem in an electronics/electrical engineering setting: circuits, signals, electromagnetics, communications, semiconductor devices or control systems.',
+      'Use board-exam-style advanced engineering mathematics — differential equations, Laplace and Fourier transforms, complex variables, vector calculus and engineering data analysis — applied to ECE/ET problems.',
+      'Example: instead of a bare "solve dy/dx + 2y = 0", ask about the natural response of an RC circuit or a damped system governed by that equation.',
+    )
+  } else if (programId === 'ectle') {
+    lines.push(
+      'Keep everything at the Electronics Technician level: practical equipment, components, test instruments, maintenance and repair, and the Philippine Electronics Code, Philippine Electrical Code and RA 9292.',
+    )
+  } else {
+    lines.push(
+      'Ground content in ECE practice: electronic devices and circuits, electromagnetics, communications, digital logic, microcontrollers, feedback control, and economics/ethics as applied to the profession.',
+    )
+  }
+
+  if (subject.includes('general') || subject.includes('geas')) {
+    lines.push(
+      'For GEAS-style subjects, tie chemistry, physics, engineering economics, management and ethics questions to electronics engineering workplace situations and professional practice.',
+    )
+  }
+
+  return lines
+}
+
 function buildPrompt(input: GenerateQuestionsInput): string {
   const difficultyInstruction =
     input.difficulty === 'mixed'
@@ -76,13 +124,9 @@ function buildPrompt(input: GenerateQuestionsInput): string {
       : `Make every question ${input.difficulty} difficulty.`
 
   return [
-    'You are an expert reviewer and item writer for Philippine engineering board exams.',
+    ...examinerGuidance(input.programId, input.programName, input.subjectName, input.topicName),
     '',
     `Write exactly ${input.count} original multiple-choice questions on the topic below.`,
-    '',
-    `Board / program: ${input.programName} (${input.programId.toUpperCase()})`,
-    `Subject: ${input.subjectName}`,
-    `Topic: ${input.topicName}`,
     '',
     'Requirements for every question:',
     '- Four plausible options, with exactly one unambiguously correct answer.',
@@ -110,11 +154,11 @@ function buildExtractPrompt(input: GenerateQuestionsInput, fileName: string): st
     : ['', `Topic for all questions: ${input.topicName}`]
 
   return [
-    'You extract multiple-choice board exam questions from a PDF document.',
+    ...examinerGuidance(input.programId, input.programName, input.subjectName, input.topicName),
+    '',
+    'You are extracting questions from a PDF for this board exam. Preserve the source wording, but classify and tag everything against the exam above — never against an unrelated discipline.',
     '',
     `Source file: ${fileName}`,
-    `Tag every extracted question with this board / program: ${input.programName} (${input.programId.toUpperCase()})`,
-    `Default subject: ${input.subjectName}`,
     ...classifyInstruction,
     '',
     'Requirements:',
@@ -306,10 +350,21 @@ export async function generateFlashcards(
     `${index + 1}. Program: ${target.programName}; Subject: ${target.subjectName}; Topic: ${target.name} (topicId: ${target.id}) — create ${input.perTopic} cards.`,
   )
 
+  const guidance = [
+    ...new Set(
+      input.targets.flatMap((target) =>
+        examinerGuidance(target.programId, target.programName, target.subjectName, target.name),
+      ),
+    ),
+  ]
+
   const prompt = [
-    'You create flashcards for Philippine engineering board exam review.',
+    ...guidance,
+    '',
+    'Think like that board examiner when choosing what is worth memorising for the exam.',
     '',
     'IMPORTANT: Cards must be purely CONCEPTUAL. Write concept-check questions and the concepts themselves as found in standard textbooks and review books. Never write numerical problems, calculations, or "solve for X" items. Do not ask the learner to compute anything.',
+    'For a mathematics subject, ask conceptually how an engineering-math tool is used in electronics engineering — for example "What does a Laplace transform let an engineer analyze?" — never a computation.',
     '',
     'Good fronts: "What does the Nyquist sampling theorem state?", "What is the purpose of a Zener diode?", "Which principle explains why a conductor has low resistivity?"',
     'Good backs: one concise textbook concept, definition, rule, code provision or principle — with no numbers to calculate.',
@@ -392,6 +447,7 @@ export async function generateFlashcards(
 export interface SolveQuestionInput {
   prompt: string
   options: string[]
+  programId: ProgramId
   programName: string
   subjectName: string
   topicName: string
@@ -418,13 +474,9 @@ export async function solveQuestion(
   apiKey: string,
 ): Promise<SolvedQuestion> {
   const prompt = [
-    'You are an expert reviewer for Philippine engineering board exams.',
+    ...examinerGuidance(input.programId, input.programName, input.subjectName, input.topicName),
     '',
-    'Determine the single correct answer to this multiple-choice question and write a concise solution.',
-    '',
-    `Board / program: ${input.programName}`,
-    `Subject: ${input.subjectName}`,
-    `Topic: ${input.topicName}`,
+    'Determine the single correct answer to this multiple-choice question and write a concise solution from the perspective of that board examiner.',
     '',
     'Question:',
     input.prompt,

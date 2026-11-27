@@ -32,6 +32,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       {
         prompt: body.prompt,
         options: body.options,
+        programId: body.programId ?? 'ecele',
         programName: body.programName ?? 'Board exam',
         subjectName: body.subjectName ?? 'Subject',
         topicName: body.topicName ?? 'Topic',

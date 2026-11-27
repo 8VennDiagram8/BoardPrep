@@ -748,6 +748,7 @@ function ManualPanel() {
       const solved = await solveQuestionRequest({
         prompt: prompt.trim(),
         options: options.map((option) => option.trim()),
+        programId,
         programName: catalog.programs.find((item) => item.id === programId)?.name ?? programId,
         subjectName: catalog.subjects.find((item) => item.id === subjectId)?.name ?? subjectId,
         topicName: catalog.topics.find((item) => item.id === topicId)?.name ?? 'Topic',

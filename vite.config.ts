@@ -136,6 +136,7 @@ function geminiApiPlugin() {
           const body = await readJson(req) as {
             prompt?: string
             options?: string[]
+            programId?: ProgramId
             programName?: string
             subjectName?: string
             topicName?: string
@@ -147,6 +148,7 @@ function geminiApiPlugin() {
             {
               prompt: body.prompt,
               options: body.options,
+              programId: body.programId ?? 'ecele',
               programName: body.programName ?? 'Board exam',
               subjectName: body.subjectName ?? 'Subject',
               topicName: body.topicName ?? 'Topic',

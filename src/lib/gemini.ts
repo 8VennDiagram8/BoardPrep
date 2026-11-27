@@ -78,6 +78,7 @@ export async function requestGeneratedFlashcards(
 export interface SolveQuestionRequest {
   prompt: string
   options: string[]
+  programId: ProgramId
   programName: string
   subjectName: string
   topicName: string
