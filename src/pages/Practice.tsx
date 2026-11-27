@@ -30,12 +30,13 @@ type SetupMode = 'practice' | 'mock'
 export function Practice() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { catalog, settings, questionsForTopic, questionsForProgram, program, topic, recordAttempt } = useApp()
+  const { catalog, settings, questionsForProgram, program, topic, recordAttempt } = useApp()
 
   /* ------------------------------ setup state ----------------------------- */
   const [setupProgram, setSetupProgram] = useState<ProgramId>('ecele')
   const [setupMode, setSetupMode] = useState<SetupMode>('practice')
-  const [setupTopic, setSetupTopic] = useState<string>('')
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([])
+  const [topicSubjectFilter, setTopicSubjectFilter] = useState('all')
   const [setupCount, setSetupCount] = useState(10)
 
   /* ------------------------------ quiz state ------------------------------ */
@@ -57,32 +58,36 @@ export function Practice() {
 
   const active = questions.length > 0
   const programTopics = catalog.topics.filter((item) => item.programId === setupProgram)
-  const availableQuestions = setupMode === 'mock'
-    ? questionsForProgram(setupProgram)
-    : setupTopic
-      ? questionsForTopic(setupTopic)
-      : questionsForProgram(setupProgram)
+  const visibleTopics = topicSubjectFilter === 'all'
+    ? programTopics
+    : programTopics.filter((item) => item.subjectId === topicSubjectFilter)
+  const availableQuestions = questionsForProgram(setupProgram).filter(
+    (question) => selectedTopics.length === 0 || selectedTopics.includes(question.topicId),
+  )
   const maxQuestions = Math.max(1, availableQuestions.length)
   const effectiveCount = Math.min(setupCount, maxQuestions)
 
   /* ------------------------------ session start --------------------------- */
   const startSession = useCallback(
-    (programId: ProgramId, mode: AttemptMode, topicId: string | null) => {
-      const pool = mode === 'mock'
-        ? questionsForProgram(programId)
-        : topicId
-          ? questionsForTopic(topicId)
-          : questionsForProgram(programId)
+    (programId: ProgramId, mode: AttemptMode, topicIds: string[]) => {
+      const programQuestions = questionsForProgram(programId)
+      const pool = topicIds.length === 0
+        ? programQuestions
+        : programQuestions.filter((question) => topicIds.includes(question.topicId))
       if (pool.length === 0) return
 
       const selected = mode === 'mock'
         ? pickRandom(pool, Math.min(settings.examMinutes * 2, pool.length))
         : pickRandom(pool, Math.min(10, pool.length))
 
+      const onlyTopic = topicIds.length === 1 ? topicIds[0] : null
+      const selectedSubjects = new Set(topicIds.map((id) => topic(id)?.subjectId).filter(Boolean))
+      const sharedSubject = selectedSubjects.size === 1 ? ([...selectedSubjects][0] ?? null) : null
+
       setSessionProgram(programId)
       setSessionMode(mode)
-      setSessionTopic(topicId)
-      setSessionSubject(topicId ? (topic(topicId)?.subjectId ?? null) : null)
+      setSessionTopic(onlyTopic)
+      setSessionSubject(sharedSubject)
       setQuestions(selected)
       setAnswers({})
       setCurrentIndex(0)
@@ -92,7 +97,7 @@ export function Practice() {
       questionStartRef.current = Date.now()
       window.scrollTo({ top: 0, behavior: 'smooth' })
     },
-    [questionsForProgram, questionsForTopic, settings.examMinutes, topic],
+    [questionsForProgram, settings.examMinutes, topic],
   )
 
   // Honour deep links such as /practice?program=ecele&topic=ecele-elecs-dc
@@ -118,8 +123,10 @@ export function Practice() {
     autoStartedRef.current = search
     setSetupProgram(programId)
     setSetupMode(isMock ? 'mock' : 'practice')
-    if (resolvedTopic) setSetupTopic(resolvedTopic)
-    startSession(programId, isMock ? 'mock' : 'practice', resolvedTopic)
+    const topicIds = resolvedTopic ? [resolvedTopic] : []
+    setSelectedTopics(topicIds)
+    setTopicSubjectFilter('all')
+    startSession(programId, isMock ? 'mock' : 'practice', topicIds)
   }, [searchParams, catalog, startSession])
 
   /* --------------------------------- timer -------------------------------- */
@@ -271,7 +278,8 @@ export function Practice() {
                       type="button"
                       onClick={() => {
                         setSetupProgram(item.id)
-                        setSetupTopic('')
+                        setSelectedTopics([])
+                        setTopicSubjectFilter('all')
                       }}
                       className={cn(
                         'flex items-center gap-3 rounded-xl border p-4 text-left transition',
@@ -338,46 +346,104 @@ export function Practice() {
 
             {/* Scope */}
             <section className="card p-5 sm:p-6">
-              <h2 className="heading mb-4 text-base">3. Choose your scope</h2>
-              {setupMode === 'mock' ? (
-                <div className="rounded-xl border border-line bg-surface-2 p-4 text-sm text-muted">
-                  <Sparkles size={16} className="mb-2 text-brand-500" />
-                  The mock exam mixes questions from every subject in{' '}
-                  <strong className="text-ink">{program(setupProgram)?.code}</strong>. Duration:{' '}
-                  <strong className="text-ink">{settings.examMinutes} minutes</strong> (change in Settings).
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="heading text-base">3. Choose your scope</h2>
+                <div className="flex gap-1">
+                  <button type="button" className="btn btn-ghost !text-xs" onClick={() => setSelectedTopics([])}>
+                    All topics
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost !text-xs"
+                    onClick={() => setSelectedTopics(visibleTopics.map((item) => item.id))}
+                  >
+                    Select visible
+                  </button>
+                </div>
+              </div>
+              <p className="mb-4 text-xs leading-relaxed text-muted">
+                Pick one or more topics. Leave everything unchecked to cover all topics in{' '}
+                <strong className="text-ink">{program(setupProgram)?.code}</strong>.
+              </p>
+
+              <label className="mb-3 block">
+                <span className="mb-1.5 block text-xs font-semibold text-muted">Filter by subject</span>
+                <select
+                  className="input"
+                  value={topicSubjectFilter}
+                  onChange={(event) => setTopicSubjectFilter(event.target.value)}
+                >
+                  <option value="all">All subjects</option>
+                  {catalog.subjects
+                    .filter((item) => item.programId === setupProgram)
+                    .map((item) => (
+                      <option key={item.id} value={item.id}>{item.code} — {item.name}</option>
+                    ))}
+                </select>
+              </label>
+
+              <div className="scrollbar-thin max-h-56 space-y-1.5 overflow-y-auto rounded-xl border border-line bg-surface-2 p-3">
+                {visibleTopics.map((item) => {
+                  const checked = selectedTopics.includes(item.id)
+                  const questionCount = catalog.questions.filter((q) => q.topicId === item.id).length
+                  return (
+                    <label
+                      key={item.id}
+                      className={cn(
+                        'flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 transition',
+                        checked ? 'bg-brand-50 dark:bg-brand-500/10' : 'hover:bg-surface',
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() =>
+                          setSelectedTopics((current) =>
+                            checked
+                              ? current.filter((id) => id !== item.id)
+                              : [...current, item.id],
+                          )
+                        }
+                        className="size-4 shrink-0 accent-brand-600"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-semibold">{item.name}</span>
+                        <span className="block text-[0.65rem] text-muted">
+                          {catalog.subjects.find((subject) => subject.id === item.subjectId)?.code} · {questionCount} questions
+                        </span>
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+              <p className="mt-2 text-[0.7rem] text-muted">
+                {selectedTopics.length === 0
+                  ? `All ${programTopics.length} topics`
+                  : `${selectedTopics.length} topic${selectedTopics.length === 1 ? '' : 's'} selected`}{' '}
+                · {availableQuestions.length} questions available
+              </p>
+
+              {setupMode === 'practice' ? (
+                <div className="mt-4">
+                  <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-muted">
+                    <span>Questions</span>
+                    <span className="text-ink">{effectiveCount} available</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={3}
+                    max={Math.max(3, Math.min(30, maxQuestions))}
+                    value={Math.min(setupCount, Math.max(3, maxQuestions))}
+                    onChange={(event) => setSetupCount(Number(event.target.value))}
+                    className="w-full accent-brand-600"
+                  />
                 </div>
               ) : (
-                <>
-                  <label className="mb-4 block">
-                    <span className="mb-1.5 block text-xs font-semibold text-muted">Topic</span>
-                    <select
-                      className="input"
-                      value={setupTopic}
-                      onChange={(event) => setSetupTopic(event.target.value)}
-                    >
-                      <option value="">All topics in this program</option>
-                      {programTopics.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {program(item.programId)?.code} · {item.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <div>
-                    <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-muted">
-                      <span>Questions</span>
-                      <span className="text-ink">{effectiveCount} available</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={3}
-                      max={Math.max(3, Math.min(30, maxQuestions))}
-                      value={Math.min(setupCount, Math.max(3, maxQuestions))}
-                      onChange={(event) => setSetupCount(Number(event.target.value))}
-                      className="w-full accent-brand-600"
-                    />
-                  </div>
-                </>
+                <div className="mt-4 rounded-xl border border-line bg-surface-2 p-3 text-xs leading-relaxed text-muted">
+                  <Sparkles size={15} className="mb-1.5 text-brand-500" />
+                  Timed exam · <strong className="text-ink">{settings.examMinutes} minutes</strong>.
+                  Answers are locked once selected.
+                </div>
               )}
             </section>
           </div>
@@ -397,11 +463,11 @@ export function Practice() {
               <div className="flex justify-between gap-3">
                 <dt className="text-muted">Scope</dt>
                 <dd className="max-w-40 truncate text-right font-semibold">
-                  {setupMode === 'mock'
-                    ? 'All subjects'
-                    : setupTopic
-                      ? topic(setupTopic)?.name
-                      : 'Mixed topics'}
+                  {selectedTopics.length === 0
+                    ? 'All topics'
+                    : selectedTopics.length === 1
+                      ? topic(selectedTopics[0])?.name
+                      : `${selectedTopics.length} topics`}
                 </dd>
               </div>
               <div className="flex justify-between gap-3">
@@ -420,7 +486,7 @@ export function Practice() {
               type="button"
               className="btn btn-primary mt-6 w-full"
               disabled={availableQuestions.length === 0}
-              onClick={() => startSession(setupProgram, setupMode, setupMode === 'mock' ? null : setupTopic || null)}
+              onClick={() => startSession(setupProgram, setupMode, selectedTopics)}
             >
               <Target size={17} /> Start session
             </button>

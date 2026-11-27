@@ -12,7 +12,7 @@ The catalog is data-driven, so more programs, subjects and topics can be added l
 ## Features
 
 - Program and subject browser with per-topic progress
-- Topic practice drills with instant feedback and explanations
+- Topic practice drills with instant feedback and explanations; select one, multiple, or all topics per session
 - Timed mixed-subject mock exams with a countdown and locked answers
 - Results page with score, subject breakdown and full answer review
 - Flashcards with flip, shuffle, known/review-again tracking, plus AI-generated and manually typed **concept-only** cards
