@@ -2,7 +2,7 @@
  * Shared question-generation logic used by both the Vercel serverless functions
  * and the Vite dev middleware. Kept free of framework types so it runs in both.
  *
- * Model: gemini-3.6-flash (Google AI Studio / Gemini API)
+ * Model identifier is configured server-side; callers never see it.
  */
 import type { Difficulty, Flashcard, ProgramId, Question } from '../src/lib/types.ts'
 
@@ -24,7 +24,7 @@ export interface GenerateQuestionsInput {
   topicName: string
   count: number
   difficulty: 'mixed' | Difficulty
-  /** When importing a mixed PDF, let Gemini pick the topic per question. */
+  /** When importing a mixed PDF, let the AI pick the topic per question. */
   autoDetectTopic?: boolean
   topics?: TopicCandidate[]
 }
@@ -254,19 +254,19 @@ async function callGemini(
   if (!response.ok) {
     const message =
       (raw.error as { message?: string } | undefined)?.message ??
-      `Gemini API returned HTTP ${response.status}.`
+      `The AI service returned HTTP ${response.status}.`
     throw new Error(message)
   }
 
   const candidates = raw.candidates as Array<{ content?: { parts?: Array<{ text?: string }> } }> | undefined
   const text = candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? ''
-  if (!text) throw new Error('Gemini returned an empty response. Please try again.')
+  if (!text) throw new Error('The AI service returned an empty response. Please try again.')
 
   let parsed: { questions?: GeminiQuestion[] }
   try {
     parsed = JSON.parse(stripCodeFence(text)) as { questions?: GeminiQuestion[] }
   } catch {
-    throw new Error('Gemini returned a response that could not be parsed. Please try again.')
+    throw new Error('The AI service returned a response that could not be parsed. Please try again.')
   }
 
   const topicCandidates = input.autoDetectTopic ? (input.topics ?? []).slice(0, 100) : []
@@ -401,19 +401,19 @@ export async function generateFlashcards(
   if (!response.ok) {
     const message =
       (raw.error as { message?: string } | undefined)?.message ??
-      `Gemini API returned HTTP ${response.status}.`
+      `The AI service returned HTTP ${response.status}.`
     throw new Error(message)
   }
 
   const candidates = raw.candidates as Array<{ content?: { parts?: Array<{ text?: string }> } }> | undefined
   const text = candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? ''
-  if (!text) throw new Error('Gemini returned an empty response. Please try again.')
+  if (!text) throw new Error('The AI service returned an empty response. Please try again.')
 
   let parsed: { flashcards?: Array<{ front?: unknown; back?: unknown; topicId?: unknown }> }
   try {
     parsed = JSON.parse(stripCodeFence(text)) as typeof parsed
   } catch {
-    throw new Error('Gemini returned a response that could not be parsed. Please try again.')
+    throw new Error('The AI service returned a response that could not be parsed. Please try again.')
   }
 
   const cards: Flashcard[] = []
@@ -513,25 +513,25 @@ export async function solveQuestion(
   if (!response.ok) {
     const message =
       (raw.error as { message?: string } | undefined)?.message ??
-      `Gemini API returned HTTP ${response.status}.`
+      `The AI service returned HTTP ${response.status}.`
     throw new Error(message)
   }
 
   const candidates = raw.candidates as Array<{ content?: { parts?: Array<{ text?: string }> } }> | undefined
   const text = candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? ''
-  if (!text) throw new Error('Gemini returned an empty response. Please try again.')
+  if (!text) throw new Error('The AI service returned an empty response. Please try again.')
 
   let parsed: { answerIndex?: unknown; explanation?: unknown; difficulty?: unknown }
   try {
     parsed = JSON.parse(stripCodeFence(text)) as typeof parsed
   } catch {
-    throw new Error('Gemini returned a response that could not be parsed. Please try again.')
+    throw new Error('The AI service returned a response that could not be parsed. Please try again.')
   }
 
   const answerIndex = typeof parsed.answerIndex === 'number' ? Math.floor(parsed.answerIndex) : -1
   const explanation = typeof parsed.explanation === 'string' ? parsed.explanation.trim() : ''
   if (answerIndex < 0 || answerIndex >= input.options.length || !explanation) {
-    throw new Error('Gemini could not determine a valid answer. Please try again.')
+    throw new Error('The AI service could not determine a valid answer. Please try again.')
   }
 
   return {

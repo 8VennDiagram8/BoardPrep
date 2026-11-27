@@ -17,7 +17,7 @@ import { Link } from 'react-router-dom'
 import { Badge, EmptyState, PageHeader } from '../components/ui'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
-import { GEMINI_MODEL, solveQuestionRequest, type TopicCandidate } from '../lib/gemini'
+import { solveQuestionRequest, type TopicCandidate } from '../lib/gemini'
 import {
   cancelGenerateJob,
   cancelPdfJob,
@@ -359,7 +359,7 @@ function GeneratePanel() {
           onDiscard={resetGenerateJob}
         />
         {generate.running && generate.batches.length === 0 ? (
-          <LoadingCard message={generate.progress || 'Contacting Gemini 3.6 Flash'} />
+          <LoadingCard message={generate.progress || 'Preparing your questions…'} />
         ) : generate.batches.length === 0 && !generate.saved ? (
           <EmptyState icon="✨" title="No questions generated yet" description="Choose a scope and generate. Work continues even if you leave this tab." />
         ) : (
@@ -516,7 +516,7 @@ function PdfImportPanel() {
           <span className="min-w-0 flex-1">
             <span className="block text-xs font-bold text-ink">Auto-detect topic per question</span>
             <span className="mt-0.5 block text-[0.7rem] leading-snug text-muted">
-              Let Gemini file each question into the right topic
+              Let the AI file each question into the right topic
             </span>
           </span>
           <span className="flex shrink-0 flex-col items-end gap-1.5">
@@ -539,7 +539,7 @@ function PdfImportPanel() {
         </button>
         <p className="mb-4 text-[0.7rem] leading-relaxed text-muted">
           {autoDetect
-            ? 'Gemini reads each question and files it under the most relevant topic, even if the PDF is randomly ordered.'
+            ? 'The AI reads each question and files it under the most relevant topic, even if the PDF is randomly ordered.'
             : 'Every extracted question will be saved under the topic you choose below.'}
         </p>
         <TopicPicker
@@ -561,7 +561,7 @@ function PdfImportPanel() {
             className="input !py-2 !text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
           />
           <span className="mt-1.5 block text-[0.7rem] leading-relaxed text-muted">
-            Up to 20 MB. Large PDFs are processed in page batches with Gemini 3.6 Flash.
+            Up to 20 MB. Large PDFs are processed in page batches.
           </span>
         </label>
         <label className="mb-4 block">
@@ -636,7 +636,7 @@ function PdfImportPanel() {
         {pdf.running && pdf.questions.length === 0 ? (
           <LoadingCard message={pdf.progress || 'Reading your PDF and classifying each question…'} />
         ) : pdf.questions.length === 0 && !pdf.cancelled && !pdf.finished ? (
-          <EmptyState icon="📄" title="No questions extracted yet" description="Choose a PDF, then extract. Questions are grouped by the topic Gemini detects for each one." />
+          <EmptyState icon="📄" title="No questions extracted yet" description="Choose a PDF, then extract. Questions are grouped by the topic the AI detects for each one." />
         ) : (
           <div className="space-y-5">
             {autoDetect && (
@@ -737,7 +737,7 @@ function ManualPanel() {
     resetForm()
   }
 
-  async function solveWithGemini() {
+  async function solveWithAI() {
     setSolveError(null)
     if (!prompt.trim() || options.some((option) => !option.trim())) {
       setSolveError('Fill in the question and all four options first.')
@@ -825,11 +825,11 @@ function ManualPanel() {
           <button
             type="button"
             className="btn btn-secondary mb-4 w-full !text-xs"
-            onClick={() => void solveWithGemini()}
+            onClick={() => void solveWithAI()}
             disabled={solving}
           >
             {solving ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}
-            {solving ? 'Asking Gemini…' : 'Generate answer & solution with Gemini'}
+            {solving ? 'Generating…' : 'Generate answer & solution'}
           </button>
           {solveError && (
             <p className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
@@ -881,7 +881,7 @@ function ManualPanel() {
 export function QuestionGenerator() {
   const [tab, setTab] = useState<Tab>('generate')
   const tabs: Array<{ id: Tab; label: string; icon: typeof WandSparkles }> = [
-    { id: 'generate', label: 'Generate with AI', icon: WandSparkles },
+    { id: 'generate', label: 'Generate', icon: WandSparkles },
     { id: 'pdf', label: 'Import PDF', icon: FileUp },
     { id: 'manual', label: 'Type manually', icon: PencilLine },
   ]
@@ -891,8 +891,8 @@ export function QuestionGenerator() {
       <PageHeader
         eyebrow="Question bank"
         title="Add board exam questions"
-        description={`Generate with ${GEMINI_MODEL}, extract from a PDF, or type them yourself — every question is saved with its answer and solution.`}
-        actions={<Badge tone="brand"><Sparkles size={12} /> Gemini 3.6 Flash</Badge>}
+        description="Generate questions, extract them from a PDF, or type them yourself — every question is saved with its answer and solution."
+        actions={<Badge tone="brand"><Sparkles size={12} /> AI powered</Badge>}
       />
       <div className="mb-6 flex flex-wrap gap-2">
         {tabs.map(({ id, label, icon: Icon }) => (

@@ -20,7 +20,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {
     return res.status(500).json({
-      error: 'GEMINI_API_KEY is not configured on the server. Add it to your environment variables.',
+      error: 'The AI service is not configured on the server. Add the API key to your environment variables.',
     })
   }
 

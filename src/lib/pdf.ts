@@ -1,6 +1,6 @@
 import { PDFDocument } from 'pdf-lib'
 
-/** Splits a PDF into small page ranges so each Gemini call stays under output limits. */
+/** Splits a PDF into small page ranges so each AI call stays under output limits. */
 export async function splitPdf(
   bytes: Uint8Array,
   pagesPerChunk = 5,

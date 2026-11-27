@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  CalendarClock,
   BookOpen,
   GraduationCap,
   Layers3,
@@ -146,11 +147,27 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
 export function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
+  const { examDates, program } = useApp()
   const location = useLocation()
 
   useEffect(() => {
     setDrawerOpen(false)
   }, [location.pathname])
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(interval)
+  }, [])
+
+  const nextExam = examDates
+    .filter((item) => new Date(item.date).getTime() > now)
+    .sort((a, b) => a.date.localeCompare(b.date))[0]
+  const remaining = nextExam ? Math.max(0, new Date(nextExam.date).getTime() - now) : 0
+  const days = Math.floor(remaining / 86_400_000)
+  const hours = Math.floor((remaining % 86_400_000) / 3_600_000)
+  const minutes = Math.floor((remaining % 3_600_000) / 60_000)
+  const countdownLabel = `${days}d ${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m`
 
   return (
     <div className="flex min-h-screen bg-bg">
@@ -203,6 +220,19 @@ export function Layout() {
             </span>
           </div>
           <div className="flex items-center gap-1.5">
+            {nextExam && (
+              <NavLink
+                to="/"
+                className="hidden items-center gap-2 rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 text-xs font-semibold md:inline-flex"
+                title={`Next ${program(nextExam.programId)?.code} board exam`}
+              >
+                <CalendarClock size={15} className="text-brand-500" />
+                <span className="text-muted">{program(nextExam.programId)?.code}</span>
+                <span className="font-mono tabular-nums text-brand-600 dark:text-brand-400">
+                  {countdownLabel}
+                </span>
+              </NavLink>
+            )}
             <ThemeToggle />
             <NavLink to="/settings" className="btn btn-ghost hidden size-9 !px-0 sm:inline-flex" title="Settings">
               <Settings2 size={17} />

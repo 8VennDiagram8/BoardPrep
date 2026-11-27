@@ -15,11 +15,11 @@ The catalog is data-driven, so more programs, subjects and topics can be added l
 - Topic practice drills with instant feedback and explanations
 - Timed mixed-subject mock exams with a countdown and locked answers
 - Results page with score, subject breakdown and full answer review
-- Flashcards with flip, shuffle, known/review-again tracking, plus Gemini-generated and manually typed **concept-only** cards
-- **Question bank tools** — generate questions with `gemini-3.6-flash`, extract them from uploaded PDFs, or type them manually — all with answers and solutions
+- Flashcards with flip, shuffle, known/review-again tracking, plus AI-generated and manually typed **concept-only** cards
+- **Question bank tools** — generate questions with AI, extract them from uploaded PDFs, or type them manually — all with answers and solutions
 - Progress analytics: accuracy trend, mastery table, streak and session history
 - Guest (demo) mode plus Supabase email/password authentication
-- **Board exam countdown** — add your exam date/time in Settings and see a live days/hours/minutes/seconds countdown on the dashboard
+- **Board exam countdown** — add your exam date/time in Settings and see a live countdown on the dashboard and in the header
 - Light/dark themes, responsive layout, JSON progress export
 
 ## Quick start
@@ -57,17 +57,17 @@ Every signed-in account has its own data. localStorage keys are suffixed with th
 
 Open **Question Bank** in the sidebar. It has three tabs:
 
-- **Generate with AI** — pick a board, subject and scope (single topic, all topics in a subject, or all topics in the program), choose questions per topic, then generate. Every item has four options, one correct answer and a written solution.
+- **Generate** — pick a board, subject and scope (single topic, all topics in a subject, or all topics in the program), choose questions per topic, then generate. Every item has four options, one correct answer and a written solution.
 - **Import PDF** — upload a PDF (up to 20 MB). Large files are split into page batches in the browser and processed one batch at a time, so dense questionnaires (hundreds or thousands of items) aren't cut off by a single response limit. Choose **Pages per batch** (2–10; smaller = more thorough). With **auto-detect topic per question** on (default), each question is classified into the most relevant topic — even when the questionnaire is randomly ordered — and the preview groups questions by detected topic. You can turn it off to tag everything under one chosen topic.
-- **Type manually** — enter a question and four options. If the answer isn't given, click **Generate answer & solution with Gemini** to have the correct option, explanation and difficulty filled in automatically. Build a draft and save it when done; you can edit draft items before saving.
+- **Type manually** — enter a question and four options. If the answer isn't given, click **Generate answer & solution** to have the correct option, explanation and difficulty filled in automatically. Build a draft and save it when done; you can edit draft items before saving.
 
 ### Flashcards
 
-The **Flashcards** page has three tabs: **Study deck** (flip/shuffle/known tracking), **Generate with AI** and **Type manually**. Generated and typed cards are **purely conceptual** — definitions, principles, textbook concepts and board-exam rules, never calculations. Generation runs in the background like the question tools and auto-saves each topic's cards.
+The **Flashcards** page has three tabs: **Study deck** (flip/shuffle/known tracking), **Generate** and **Type manually**. Generated and typed cards are **purely conceptual** — definitions, principles, textbook concepts and board-exam rules, never calculations. Generation runs in the background like the question tools and auto-saves each topic's cards.
 
 Saved questions immediately appear in practice, mock exams, analytics and flashcard topics.
 
-The browser calls BoardPrep's own `/api/generate-questions`, `/api/import-pdf`, `/api/solve-question` and `/api/generate-flashcards` routes. The key is **server-side only** — set `GEMINI_API_KEY` in `.env.local` for development or in Vercel for production; there is no key field in the UI and the key is never sent to the browser. The model used is `gemini-3.6-flash` with structured JSON output and low thinking for faster generation.
+The browser calls BoardPrep's own `/api/generate-questions`, `/api/import-pdf`, `/api/solve-question` and `/api/generate-flashcards` routes. The key is **server-side only** — set the API key environment variable in `.env.local` for development or in Vercel for production; there is no key field in the UI and the key is never sent to the browser. Structured JSON output is used for reliable results.
 
 ```env
 GEMINI_API_KEY=your-gemini-api-key
@@ -108,7 +108,7 @@ src/
   lib/            Supabase client, API layer, local storage, helpers
   pages/          Route screens
 api/              Vercel serverless function for question generation
-server/           Shared Gemini generation logic (used by Vercel + dev server)
+server/           Shared AI generation logic (used by Vercel + dev server)
 supabase/
   migrations/     Database schema and RLS policies
   seed.sql        Generated starter content

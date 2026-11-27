@@ -604,7 +604,7 @@ export function Flashcards() {
   const [tab, setTab] = useState<Tab>('study')
   const tabs: Array<{ id: Tab; label: string; icon: typeof Sparkles }> = [
     { id: 'study', label: 'Study deck', icon: RotateCcw },
-    { id: 'generate', label: 'Generate with AI', icon: WandSparkles },
+    { id: 'generate', label: 'Generate', icon: WandSparkles },
     { id: 'manual', label: 'Type manually', icon: PencilLine },
   ]
 

@@ -31,7 +31,7 @@ function send(res: any, status: number, payload: unknown) {
 function getApiKey(): string {
   const key = process.env.GEMINI_API_KEY
   if (!key) {
-    throw new Error('GEMINI_API_KEY is not configured. Add it to .env.local and restart the dev server.')
+    throw new Error('The AI service is not configured. Add the API key to .env.local and restart the dev server.')
   }
   return key
 }
